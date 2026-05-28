@@ -19,10 +19,12 @@ if (empty($apiKey)) {
 
 $input = json_decode(file_get_contents('php://input'), true);
 $transcript = trim($input['transcript'] ?? '');
+$audioData = $input['audio_data'] ?? '';
+$audioType = $input['audio_type'] ?? 'audio/mp4';
 
-if (empty($transcript)) {
+if (empty($transcript) && empty($audioData)) {
     http_response_code(400);
-    echo json_encode(['error' => '書き起こしテキストが空です']);
+    echo json_encode(['error' => '書き起こしテキストまたは音声データが必要です']);
     exit;
 }
 
@@ -61,12 +63,46 @@ P（計画）：以下の4項目を必ず含めること
 }
 PROMPT;
 
+if (!empty($audioData)) {
+    $audioPrompt = <<<APROMPT
+あなたは婦人科専門クリニックの医療記録専門家です。
+添付の音声ファイルの診察内容をSOAP形式でカルテにまとめてください。
+
+【出力形式】
+S（主訴・現病歴）：患者の訴え、症状の経過、既往歴など主観的情報
+O（所見・検査）：医師が確認した客観的所見、検査結果、バイタル等
+A（評価・アセスメント）：医師の診断・鑑別診断・病態評価
+P（計画）：以下の4項目を必ず含めること
+  ・処方内容（薬剤名・用量・用法・日数）
+  ・処置内容（当日実施した検査・注射等）
+  ・次回受診（時期・条件・確認事項を具体的に）
+  ・患者指導（生活指導、検診指示、注意事項）
+
+【注意事項】
+・医療用語は正式名称で記載（略語は初出時にフルスペル併記）
+・処方内容は薬剤名、用量、用法を具体的に記載
+・会話の全体を通じて漏れなく情報を拾うこと（特に会話終盤のフォロー指示を見落とさない）
+・会話中に明示されていない情報を補完する場合は【推定】と明記すること
+・音声認識の誤認識は文脈から正しい医療用語に修正すること
+・カルテ本文のみを出力すること。説明文・前置き・後書きは一切不要
+・情報がない項目は「情報なし」と記載すること
+APROMPT;
+
+    $messages = [[
+        'role'    => 'user',
+        'content' => [
+            ['type' => 'document', 'source' => ['type' => 'base64', 'media_type' => $audioType, 'data' => $audioData]],
+            ['type' => 'text',     'text'   => $audioPrompt]
+        ]
+    ]];
+} else {
+    $messages = [['role' => 'user', 'content' => $prompt]];
+}
+
 $payload = json_encode([
     'model'      => 'claude-sonnet-4-20250514',
     'max_tokens' => 2000,
-    'messages'   => [
-        ['role' => 'user', 'content' => $prompt]
-    ]
+    'messages'   => $messages
 ]);
 
 $ch = curl_init('https://api.anthropic.com/v1/messages');
@@ -95,8 +131,14 @@ if ($httpCode !== 200) {
 $apiData = json_decode($response, true);
 $text = $apiData['content'][0]['text'] ?? '';
 
-$text = preg_replace('/```json|```/', '', $text);
-$soap = json_decode(trim($text), true);
+$text = trim(preg_replace('/```json|```/', '', $text));
+
+if (!empty($audioData)) {
+    echo json_encode(['soapText' => $text], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+$soap = json_decode($text, true);
 
 if (!$soap || !isset($soap['S'])) {
     http_response_code(500);
