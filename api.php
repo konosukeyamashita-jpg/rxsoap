@@ -10,11 +10,10 @@ header('Access-Control-Allow-Headers: Content-Type');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); echo json_encode(['error' => 'Method not allowed']); exit; }
 
-// .envからAPIキーを読み込む
-$env = parse_ini_file(__DIR__ . '/.env');
-$apiKey = $env['ANTHROPIC_API_KEY'] ?? '';
+// APIキーはGitHub Actionsでデプロイ時に置換される
+$apiKey = '__ANTHROPIC_API_KEY__';
 
-if (empty($apiKey)) {
+if (empty($apiKey) || $apiKey === '__ANTHROPIC_API_KEY__') {
     http_response_code(500);
     echo json_encode(['error' => 'APIキーが設定されていません']);
     exit;
