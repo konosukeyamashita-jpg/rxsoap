@@ -1,4 +1,7 @@
 <?php
+ini_set('display_errors', 1);
+ini_set('log_errors', 1);
+error_log("rxsoap api.php called");
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -64,6 +67,7 @@ P（計画）：以下の4項目を必ず含めること
 PROMPT;
 
 if (!empty($audioData)) {
+    error_log("audio_type: " . $audioType . " audio_data length: " . strlen($audioData));
     $audioPrompt = <<<APROMPT
 あなたは婦人科専門クリニックの医療記録専門家です。
 添付の音声ファイルの診察内容をSOAP形式でカルテにまとめてください。
@@ -121,6 +125,7 @@ curl_setopt_array($ch, [
 $response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
+error_log("http_code: " . $httpCode . " response: " . substr($response, 0, 500));
 
 if ($httpCode !== 200) {
     http_response_code(502);
