@@ -2,875 +2,614 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>GymSync — ジムの混み具合をリアルタイムで</title>
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>rxsoap</title>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
   :root {
-    --teal: #06B6AA;
-    --teal-mid: #0ED2C8;
-    --teal-dark: #0A5F5A;
-    --green: #3DD68C;
-    --yellow: #FFD166;
-    --red: #FF6B6B;
-    --bg: #F0FAFA;
-    --white: #FFFFFF;
-    --gray1: #F5F9F9;
-    --gray2: #E2EEEE;
-    --gray3: #A0B8B8;
-    --text: #1A2E2E;
-    --text2: #4A6A6A;
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --border: rgba(0,0,0,0.1);
+    --border-mid: rgba(0,0,0,0.15);
+    --text: #1a1a1a;
+    --text-muted: #888;
+    --text-hint: #bbb;
+    --green: #1a9e7a;
+    --green-light: #e6f7f2;
+    --red: #e53935;
+    --red-light: #fdecea;
+    --radius: 10px;
+    --radius-sm: 6px;
   }
 
-  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
-
-  body {
-    font-family: 'DM Sans', sans-serif;
+  html, body {
+    height: 100%;
     background: var(--bg);
+    font-family: 'DM Sans', sans-serif;
     color: var(--text);
-    min-height: 100vh;
-    max-width: 480px;
-    margin: 0 auto;
-    position: relative;
-    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
   }
 
-  /* ── TOP BAR ── */
-  .topbar {
-    position: fixed; top:0; left:50%; transform:translateX(-50%);
-    width:100%; max-width:480px;
-    background: rgba(255,255,255,0.95);
-    backdrop-filter: blur(12px);
-    z-index: 100;
-    padding: 14px 20px 12px;
-    border-bottom: 1px solid var(--gray2);
-    display: flex; align-items: center; justify-content: space-between;
+  .outer {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+
+  /* ── パネル ── */
+  .panel {
+    width: 320px;
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 0.5px solid var(--border-mid);
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+  }
+
+  /* タイトルバー */
+  .titlebar {
+    background: #1a1a1a;
+    padding: 9px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: move;
+    user-select: none;
+  }
+  .titlebar-left { display: flex; align-items: center; gap: 8px; }
+  .traffic-lights { display: flex; gap: 5px; }
+  .tl { width: 11px; height: 11px; border-radius: 50%; }
+  .tl-r { background: #ff5f57; }
+  .tl-y { background: #ffbd2e; }
+  .tl-g { background: #28c840; }
+  .titlebar-title { font-size: 12px; color: #aaa; font-family: 'DM Mono', monospace; letter-spacing: 0.04em; }
+  .titlebar-mic { color: #666; font-size: 15px; }
+
+  /* 録音ステータスバー */
+  .rec-bar {
+    height: 3px;
+    background: #e8e8e8;
+    transition: background 0.3s;
+  }
+  .rec-bar.recording { background: var(--red); animation: recbarpulse 1.2s ease-in-out infinite; }
+  .rec-bar.paused { background: #ffbd2e; animation: none; }
+  @keyframes recbarpulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  /* ボディ */
+  .body { padding: 14px; }
+
+  /* ヘッダー行 */
+  .header-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 14px;
   }
   .logo {
-    font-family: 'Nunito', sans-serif;
-    font-size: 22px; font-weight: 900;
-    color: var(--text);
-  }
-  .logo span { color: var(--teal); }
-  .topbar-sub { font-size: 11px; color: var(--text2); margin-top: 1px; }
-
-  /* ── SCREENS ── */
-  .screen {
-    display: none;
-    padding-top: 68px;
-    min-height: 100vh;
-  }
-  .screen.active { display: block; }
-
-  /* ── MAP SCREEN ── */
-  #screen-home {
-    display: none;
-    flex-direction: column;
-    padding-top: 68px;
-    height: 100vh;
-  }
-  #screen-home.active { display: flex; }
-
-  #map { width:100%; flex: 1; min-height: 0; }
-
-  .search-bar { padding: 0; background: transparent; }
-  .search-input {
-    width: 100%;
-    background: white;
-    border: none;
-    border-radius: 14px;
-    padding: 11px 16px 11px 40px;
-    font-size: 14px; font-family: 'DM Sans', sans-serif;
-    color: var(--text);
-    outline: none;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-  }
-  .search-wrap { position: relative; }
-  .search-icon { position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:16px; color:var(--gray3); }
-
-  /* Bottom sheet */
-  .bottom-sheet {
-    background: white;
-    border-radius: 24px 24px 0 0;
-    padding: 16px 0 0;
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--green);
+    display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
   }
-  .sheet-handle { width:36px; height:4px; background:var(--gray2); border-radius:4px; margin:0 auto 14px; }
-  .sheet-title {
-    font-family: 'Nunito', sans-serif;
-    font-size: 12px; font-weight: 800;
-    color: var(--text2); text-transform: uppercase; letter-spacing: 1px;
-    padding: 0 16px 10px;
+  .logo svg { width: 16px; height: 16px; }
+  .app-name { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -0.02em; }
+  .status-chip {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 5px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    background: #f0f0f0;
+    color: var(--text-muted);
+    transition: all 0.2s;
   }
-  .gym-list { overflow-y: auto; max-height: 200px; }
-  .gym-row {
-    display: flex; align-items: center; gap: 12px;
-    padding: 10px 16px;
-    border-bottom: 1px solid var(--gray2);
-    cursor: pointer;
-    transition: background 0.15s;
+  .status-chip.recording { background: var(--red-light); color: var(--red); }
+  .status-chip.paused { background: #fff8e1; color: #f59f00; }
+  .status-chip.done { background: var(--green-light); color: var(--green); }
+  .status-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: currentColor;
   }
-  .gym-row:active { background: var(--gray1); }
-  .gym-row:last-child { border-bottom: none; }
-  .gym-icon {
-    width: 40px; height: 40px; border-radius: 12px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 18px; flex-shrink: 0;
-    background: var(--teal-light, #E0FAF8);
-  }
-  .gym-info { flex: 1; min-width: 0; }
-  .gym-name { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .gym-dist { font-size: 11px; color: var(--text2); margin-top: 1px; }
-  .crowd-badge {
-    font-family: 'Nunito', sans-serif;
-    font-size: 11px; font-weight: 800;
-    padding: 4px 10px; border-radius: 20px; flex-shrink: 0;
-  }
-  .badge-empty   { background:#E6FBF1; color:#1B9E5A; }
-  .badge-normal  { background:#FFF7E0; color:#B8830A; }
-  .badge-crowded { background:#FFE8E8; color:#CC2222; }
-  .badge-none    { background:var(--gray1); color:var(--gray3); border:1px solid var(--gray2); }
+  .status-chip.recording .status-dot { animation: dotpulse 1s infinite; }
+  @keyframes dotpulse { 0%,100%{opacity:1} 50%{opacity:0.2} }
+  .timer-text { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted); }
 
-  /* ── POST SCREEN ── */
-  .post-screen { padding: 0 16px; }
-  .post-title { font-family:'Nunito',sans-serif; font-size:22px; font-weight:900; padding:20px 0 4px; }
-  .post-sub { font-size:13px; color:var(--text2); margin-bottom:20px; }
-
-  .post-gym-select {
-    background: var(--gray1); border:1.5px solid var(--gray2);
-    border-radius:16px; padding:14px 16px;
-    display:flex; align-items:center; gap:12px;
-    margin-bottom:20px; cursor:pointer;
+  /* 書き起こしボックス */
+  .section-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-hint);
+    margin-bottom: 6px;
   }
-  .post-gym-select .gym-name { font-size:14px; }
-  .change-btn { margin-left:auto; font-size:12px; color:var(--teal); font-weight:700; }
-
-  .mode-tabs { display:flex; background:var(--gray1); border-radius:14px; padding:4px; gap:4px; margin-bottom:20px; }
-  .mode-tab {
-    flex:1; padding:9px; border-radius:10px;
-    text-align:center; font-family:'Nunito',sans-serif;
-    font-weight:700; font-size:13px; color:var(--text2);
-    cursor:pointer; transition:all 0.2s; border:none; background:transparent;
-  }
-  .mode-tab.active { background:white; color:var(--teal); box-shadow:0 2px 8px rgba(0,0,0,0.08); }
-
-  .tab-content { display:none; }
-  .tab-content.active { display:block; }
-
-  .crowd-options { display:flex; flex-direction:column; gap:12px; margin-bottom:20px; }
-  .crowd-option {
-    display:flex; align-items:center; gap:14px;
-    padding:16px; border-radius:18px;
-    border:2px solid var(--gray2); cursor:pointer;
-    transition:all 0.2s; background:white;
-  }
-  .crowd-option.selected { border-color:var(--teal); background:#F0FEFA; }
-  .crowd-option-icon {
-    width:48px; height:48px; border-radius:14px;
-    display:flex; align-items:center; justify-content:center;
-    font-size:22px; flex-shrink:0;
-  }
-  .crowd-option-label { font-family:'Nunito',sans-serif; font-size:16px; font-weight:800; }
-  .crowd-option-desc { font-size:12px; color:var(--text2); }
-  .check-icon { margin-left:auto; width:22px; height:22px; border-radius:50%; background:var(--teal); display:none; align-items:center; justify-content:center; color:white; font-size:13px; }
-  .crowd-option.selected .check-icon { display:flex; }
-
-  .checkin-card {
-    background:linear-gradient(135deg, var(--teal-mid), var(--teal));
-    border-radius:22px; padding:24px;
-    color:white; text-align:center;
-  }
-  .checkin-emoji { font-size:36px; margin-bottom:8px; }
-  .checkin-text { font-family:'Nunito',sans-serif; font-size:16px; font-weight:900; margin-bottom:4px; }
-  .checkin-sub { font-size:12px; opacity:0.85; margin-bottom:16px; }
-
-  .post-btn {
-    width:100%; padding:16px;
-    background:linear-gradient(135deg, var(--teal-mid), var(--teal));
-    color:white; border:none; border-radius:18px;
-    font-family:'Nunito',sans-serif; font-weight:900; font-size:16px;
-    cursor:pointer; box-shadow:0 6px 24px rgba(6,182,170,0.35);
-    transition:transform 0.15s, opacity 0.15s;
-  }
-  .post-btn:active { transform:scale(0.97); opacity:0.9; }
-  .post-btn:disabled { opacity:0.5; cursor:not-allowed; }
-
-  .checkin-active-card {
-    background:var(--teal-light, #E0FAF8);
-    border:2px solid var(--teal);
-    border-radius:18px; padding:16px;
-    display:flex; align-items:center; gap:12px;
-    margin-bottom:16px;
-  }
-
-  /* ── TOAST ── */
-  .toast {
-    position:fixed; bottom:100px; left:50%; transform:translateX(-50%) translateY(20px);
-    background:var(--text); color:white;
-    padding:10px 20px; border-radius:20px;
-    font-size:13px; font-weight:600;
-    opacity:0; transition:all 0.3s;
-    pointer-events:none; white-space:nowrap; z-index:999;
-  }
-  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
-
-  /* ── LOADING ── */
-  .loading { text-align:center; padding:40px; color:var(--gray3); font-size:14px; }
-  .spinner { display:inline-block; width:24px; height:24px; border:3px solid var(--gray2); border-top-color:var(--teal); border-radius:50%; animation:spin 0.8s linear infinite; margin-bottom:8px; }
-  @keyframes spin { to { transform:rotate(360deg); } }
-
-  /* Gym select modal */
-  .modal-overlay {
-    display:none; position:fixed; inset:0;
-    background:rgba(0,0,0,0.4); z-index:200;
-    align-items:flex-end; justify-content:center;
-  }
-  .modal-overlay.open { display:flex; }
-  .modal-sheet {
-    background:white; border-radius:24px 24px 0 0;
-    width:100%; max-width:480px;
-    max-height:70vh; overflow-y:auto;
-    padding:20px 0;
-    animation:slideUp 0.3s ease;
-  }
-  @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
-  .modal-title { font-family:'Nunito',sans-serif; font-weight:900; font-size:16px; padding:0 16px 12px; }
-
-  #screen-post {
-    padding-top: 68px;
-    padding-bottom: 24px;
-  }
-
-  /* ── INVITE SCREEN ── */
-  #screen-invite {
-    display: none;
-    position: fixed; inset: 0;
-    background: linear-gradient(160deg, var(--teal-dark) 0%, var(--teal) 100%);
-    z-index: 999;
-    align-items: center; justify-content: center;
-    flex-direction: column;
-    padding: 40px 32px;
+  .transcribe-box {
+    background: #fafafa;
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    min-height: 72px;
+    max-height: 100px;
     overflow-y: auto;
-  }
-  #screen-invite.active { display: flex; }
-  .invite-logo { font-family:'Nunito',sans-serif; font-size:36px; font-weight:900; color:white; margin-bottom:8px; }
-  .invite-sub { color:rgba(255,255,255,0.75); font-size:14px; margin-bottom:48px; }
-  .invite-card {
-    background: white; border-radius: 24px;
-    padding: 28px 24px; width: 100%; max-width: 320px;
-    box-shadow: 0 16px 48px rgba(0,0,0,0.2);
-  }
-  .invite-card-title { font-family:'Nunito',sans-serif; font-weight:900; font-size:18px; color:var(--text); margin-bottom:6px; }
-  .invite-card-sub { font-size:13px; color:var(--text2); margin-bottom:20px; }
-  .invite-input {
-    width:100%; padding:13px 16px;
-    border:1.5px solid var(--gray2); border-radius:14px;
-    font-size:15px; font-family:'DM Sans',sans-serif; color:var(--text);
-    outline:none; margin-bottom:12px;
+    padding: 9px 10px;
+    font-size: 12px;
+    line-height: 1.65;
+    color: var(--text);
+    margin-bottom: 10px;
     transition: border-color 0.2s;
   }
-  .invite-input:focus { border-color: var(--teal); }
-  .invite-input.error { border-color: var(--red); }
-  .invite-btn {
-    width:100%; padding:14px;
-    border-radius:14px; border:none;
-    background:linear-gradient(135deg, var(--teal-mid), var(--teal));
-    color:white; font-family:'Nunito',sans-serif; font-weight:900; font-size:16px;
-    cursor:pointer; box-shadow:0 4px 16px rgba(6,182,170,0.35);
+  .transcribe-box.active { border-color: rgba(229,57,53,0.3); }
+  .transcribe-placeholder { color: var(--text-hint); }
+
+  /* 波形 */
+  .waveform {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 28px;
+    margin-bottom: 10px;
   }
-  .invite-error { font-size:12px; color:var(--red); margin-top:8px; display:none; }
+  .wb {
+    width: 3px;
+    border-radius: 2px;
+    background: #e0e0e0;
+    transition: height 0.1s ease;
+  }
+  .wb.active { background: var(--red); }
+
+  /* SOAP結果 */
+  .soap-result { display: none; margin-bottom: 10px; }
+  .soap-result.visible { display: block; }
+  .soap-item {
+    padding: 8px 0;
+    border-bottom: 0.5px solid #f0f0f0;
+  }
+  .soap-item:last-child { border-bottom: none; }
+  .soap-tag {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    color: var(--green);
+    margin-bottom: 4px;
+    font-family: 'DM Mono', monospace;
+  }
+  .soap-content {
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .soap-content ul { padding-left: 14px; }
+  .soap-content li { margin-bottom: 1px; }
+
+  /* 生成中 */
+  .generating {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 0;
+    font-size: 12px;
+    color: var(--green);
+    margin-bottom: 6px;
+  }
+  .generating.visible { display: flex; }
+  .spin { animation: spin 1s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* テンプレート・マイク行 */
+  .meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 0;
+    border-top: 0.5px solid #f0f0f0;
+    font-size: 11px;
+  }
+  .meta-label { color: var(--text-hint); }
+  .meta-val { color: var(--text-muted); font-weight: 500; }
+  .mic-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); margin-left: 4px; display: inline-block; }
+
+  /* ボタン群 */
+  .btn-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 6px;
+    padding: 10px 0 8px;
+    border-top: 0.5px solid #f0f0f0;
+  }
+  .btn-sm {
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 9px 0 7px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    transition: opacity 0.15s, transform 0.1s;
+    background: #efefef;
+    color: #555;
+  }
+  .btn-sm:active { transform: scale(0.96); }
+  .btn-sm:disabled { opacity: 0.35; cursor: default; transform: none; }
+  .btn-sm svg { width: 17px; height: 17px; }
+  .btn-sm.red { background: var(--red); color: #fff; }
+  .btn-sm.green { background: var(--green); color: #fff; }
+  .btn-sm.blue { background: #2196f3; color: #fff; }
+  .btn-sm.dark { background: #3a3a3a; color: #fff; }
+
+  .btn-start {
+    width: 100%;
+    padding: 11px 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--green);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin-top: 2px;
+    transition: opacity 0.15s;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .btn-start:hover { opacity: 0.88; }
+  .btn-start svg { width: 16px; height: 16px; }
+
+  .error-msg {
+    display: none;
+    font-size: 11px;
+    color: var(--red);
+    background: var(--red-light);
+    border-radius: var(--radius-sm);
+    padding: 7px 10px;
+    margin-bottom: 8px;
+  }
+  .error-msg.visible { display: block; }
 </style>
 </head>
 <body>
+<div class="outer">
+  <div class="panel" id="panel">
 
-<!-- INVITE SCREEN -->
-<div id="screen-invite">
-  <div class="invite-logo">Gym<span>Sync</span></div>
-  <div class="invite-sub">ジムの混み具合をリアルタイムで共有</div>
-
-  <!-- 使い方 -->
-  <div style="width:100%;max-width:320px;margin-bottom:20px;">
-    <div style="display:flex;flex-direction:column;gap:10px;">
-      <div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.15);border-radius:14px;padding:12px 14px;">
-        <div style="font-size:24px;flex-shrink:0;">🗺️</div>
-        <div>
-          <div style="color:white;font-weight:700;font-size:13px;">地図でジムを探す</div>
-          <div style="color:rgba(255,255,255,0.7);font-size:12px;margin-top:2px;">近くのジムがピンで表示されます</div>
+    <div class="titlebar" id="titlebar">
+      <div class="titlebar-left">
+        <div class="traffic-lights">
+          <div class="tl tl-r"></div>
+          <div class="tl tl-y"></div>
+          <div class="tl tl-g"></div>
         </div>
+        <span class="titlebar-title">rxsoap</span>
       </div>
-      <div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.15);border-radius:14px;padding:12px 14px;">
-        <div style="font-size:24px;flex-shrink:0;">💬</div>
-        <div>
-          <div style="color:white;font-weight:700;font-size:13px;">混み具合を投稿する</div>
-          <div style="color:rgba(255,255,255,0.7);font-size:12px;margin-top:2px;">空いてる / 普通 / 混んでる の3択でOK</div>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.15);border-radius:14px;padding:12px 14px;">
-        <div style="font-size:24px;flex-shrink:0;">✅</div>
-        <div>
-          <div style="color:white;font-weight:700;font-size:13px;">みんなで共有</div>
-          <div style="color:rgba(255,255,255,0.7);font-size:12px;margin-top:2px;">投稿が地図のピンの色に反映されます</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="invite-card">
-    <div class="invite-card-title">🔑 招待コードを入力</div>
-    <div class="invite-card-sub">招待された方のみ利用できます</div>
-    <input class="invite-input" id="invite-input" type="password" placeholder="招待コードを入力..."
-      onkeydown="if(event.key==='Enter')checkInviteCode()" />
-    <button class="invite-btn" onclick="checkInviteCode()">入る</button>
-    <div class="invite-error" id="invite-error">招待コードが違います</div>
-  </div>
-</div>
-
-<!-- TOP BAR -->
-<div class="topbar">
-  <div>
-    <div class="logo">Gym<span>Sync</span></div>
-  </div>
-  <div style="font-size:11px;color:var(--text2);">β版</div>
-</div>
-
-<!-- ========== SCREEN: HOME (MAP) ========== -->
-<div class="screen active" id="screen-home">
-  <div style="position:relative;flex:1;min-height:0;">
-    <div id="map" style="width:100%;height:100%;"></div>
-    <div class="search-bar" style="position:absolute;top:12px;left:12px;right:12px;z-index:10;">
-      <div class="search-wrap">
-        <span class="search-icon">🔍</span>
-        <input class="search-input" type="text" id="search-input" placeholder="ジム名・エリアで検索..." />
-      </div>
-    </div>
-  </div>
-  <div class="bottom-sheet">
-    <div class="sheet-handle"></div>
-    <div class="sheet-title">近くのジム</div>
-    <div class="gym-list" id="gym-list">
-      <div class="loading"><div class="spinner"></div><br>読み込み中...</div>
-    </div>
-    <div id="add-gym-area" style="display:none;padding:10px 16px 14px;">
-      <button onclick="openAddGymModal()" style="width:100%;padding:11px;border-radius:12px;border:1.5px dashed var(--gray3);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;">＋ ジムを登録する</button>
-    </div>
-  </div>
-</div>
-
-
-
-<!-- ========== SCREEN: POST ========== -->
-<div class="screen" id="screen-post">
-  <div class="post-screen">
-    <button onclick="showScreen('home')" style="display:inline-flex;align-items:center;gap:6px;background:var(--gray1);border:1.5px solid var(--gray2);border-radius:10px;padding:6px 14px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;margin-bottom:14px;">← 戻る</button>
-    <div class="post-title">混み具合を投稿</div>
-    <div class="post-sub">今のジムの状況をシェアしよう</div>
-
-    <div class="post-gym-select" id="post-gym-select" onclick="openGymModal()">
-      <div style="font-size:24px;">🏋️</div>
-      <div class="gym-info">
-        <div class="gym-name" id="post-gym-name">ジムを選択してください</div>
-        <div class="gym-dist" id="post-gym-addr">タップして選択</div>
-      </div>
-      <div class="change-btn">変更</div>
+      <svg class="titlebar-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+        <rect x="9" y="2" width="6" height="11" rx="3"/>
+        <path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/>
+      </svg>
     </div>
 
-    <div class="mode-tabs">
-      <button class="mode-tab active" onclick="switchTab('button')">ボタン投稿</button>
-      <button class="mode-tab" onclick="switchTab('checkin')">チェックイン</button>
-    </div>
+    <div class="rec-bar" id="recBar"></div>
 
-    <!-- Button post tab -->
-    <div class="tab-content active" id="tab-button">
-      <div class="crowd-options">
-        <div class="crowd-option" onclick="selectLevel('empty', this)">
-          <div class="crowd-option-icon" style="background:#E6FBF1;">😌</div>
-          <div>
-            <div class="crowd-option-label">空いてる</div>
-            <div class="crowd-option-desc">マシンはほぼ使い放題</div>
-          </div>
-          <div class="check-icon">✓</div>
+    <div class="body">
+
+      <div class="header-row">
+        <div class="logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
         </div>
-        <div class="crowd-option" onclick="selectLevel('normal', this)">
-          <div class="crowd-option-icon" style="background:#FFF7E0;">😐</div>
-          <div>
-            <div class="crowd-option-label">普通</div>
-            <div class="crowd-option-desc">適度に人がいる</div>
-          </div>
-          <div class="check-icon">✓</div>
+        <span class="app-name">rxsoap</span>
+        <div class="status-chip" id="statusChip">
+          <div class="status-dot"></div>
+          <span id="statusLabel">待機中</span>
         </div>
-        <div class="crowd-option" onclick="selectLevel('crowded', this)">
-          <div class="crowd-option-icon" style="background:#FFE8E8;">😤</div>
-          <div>
-            <div class="crowd-option-label">混んでる</div>
-            <div class="crowd-option-desc">マシン待ちが発生中</div>
-          </div>
-          <div class="check-icon">✓</div>
+        <span class="timer-text" id="timerText"></span>
+      </div>
+
+      <div class="section-label">書き起こし</div>
+      <div class="transcribe-box" id="transcribeBox">
+        <span class="transcribe-placeholder" id="placeholder">録音を開始すると書き起こしがここに表示されます</span>
+        <span id="transcribeText"></span>
+      </div>
+
+      <div class="waveform" id="waveform">
+        <div class="wb" style="height:4px"></div><div class="wb" style="height:9px"></div>
+        <div class="wb" style="height:5px"></div><div class="wb" style="height:14px"></div>
+        <div class="wb" style="height:7px"></div><div class="wb" style="height:18px"></div>
+        <div class="wb" style="height:11px"></div><div class="wb" style="height:6px"></div>
+        <div class="wb" style="height:20px"></div><div class="wb" style="height:8px"></div>
+        <div class="wb" style="height:13px"></div><div class="wb" style="height:5px"></div>
+        <div class="wb" style="height:9px"></div><div class="wb" style="height:22px"></div>
+        <div class="wb" style="height:6px"></div><div class="wb" style="height:11px"></div>
+        <div class="wb" style="height:4px"></div><div class="wb" style="height:16px"></div>
+      </div>
+
+      <div class="generating" id="generating">
+        <svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+        </svg>
+        SOAP生成中...
+      </div>
+
+      <div class="error-msg" id="errorMsg"></div>
+
+      <div class="soap-result" id="soapResult">
+        <div class="soap-item">
+          <div class="soap-tag">S — Subjective</div>
+          <div class="soap-content" id="soapS"></div>
+        </div>
+        <div class="soap-item">
+          <div class="soap-tag">O — Objective</div>
+          <div class="soap-content" id="soapO"></div>
+        </div>
+        <div class="soap-item">
+          <div class="soap-tag">A — Assessment</div>
+          <div class="soap-content" id="soapA"></div>
+        </div>
+        <div class="soap-item">
+          <div class="soap-tag">P — Plan</div>
+          <div class="soap-content" id="soapP"></div>
         </div>
       </div>
-      <button class="post-btn" id="submit-btn" onclick="submitReport()" disabled>投稿する 🏋️</button>
-    </div>
 
-    <!-- Checkin tab -->
-    <div class="tab-content" id="tab-checkin">
-      <div id="checkin-active-wrap" style="display:none;">
-        <div class="checkin-active-card">
-          <div style="font-size:28px;">📍</div>
-          <div>
-            <div style="font-weight:700;font-size:14px;" id="checkin-gym-display">—</div>
-            <div style="font-size:12px;color:var(--teal);">チェックイン中</div>
-          </div>
-          <button class="post-btn" style="width:auto;padding:8px 14px;font-size:13px;margin-left:auto;" onclick="doCheckout()">退出</button>
-        </div>
+      <div class="meta-row">
+        <span class="meta-label">テンプレート</span>
+        <span class="meta-val">SOAPサマリー形式</span>
       </div>
-      <div id="checkin-form-wrap">
-        <div class="checkin-card">
-          <div class="checkin-emoji">📍</div>
-          <div class="checkin-text">今ここにいる！</div>
-          <div class="checkin-sub">チェックインすると混雑人数に反映されます</div>
-          <button class="post-btn" style="background:rgba(255,255,255,0.25);box-shadow:none;border:2px solid rgba(255,255,255,0.5);" onclick="doCheckin()">チェックインする</button>
-        </div>
+      <div class="meta-row">
+        <span class="meta-label">マイク</span>
+        <span class="meta-val">内蔵マイク<span class="mic-dot"></span></span>
       </div>
-    </div>
-  </div>
-</div>
 
-
-
-<!-- TOAST -->
-<div class="toast" id="toast"></div>
-
-<!-- Gym select modal -->
-<div class="modal-overlay" id="gym-modal" onclick="closeGymModal(event)">
-  <div class="modal-sheet">
-    <div class="modal-title">ジムを選択</div>
-    <div id="modal-gym-list"></div>
-  </div>
-</div>
-
-<!-- Add gym modal -->
-<div class="modal-overlay" id="add-gym-modal" onclick="closeAddGymModal(event)">
-  <div class="modal-sheet" style="padding:20px 16px 32px;">
-    <div class="modal-title">🏋️ ジムを登録する</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:16px;padding:0 0 4px;">みんなが使えるようになります</div>
-    <div style="display:flex;flex-direction:column;gap:12px;">
-      <div>
-        <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px;">ジム名 <span style="color:var(--red);">*</span></div>
-        <input id="add-gym-name" type="text" placeholder="例：エニタイムフィットネス 渋谷店"
-          style="width:100%;padding:11px 14px;border:1.5px solid var(--gray2);border-radius:12px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;" />
+      <div class="btn-grid">
+        <button class="btn-sm red" id="btnStop" onclick="stopRec()" disabled>
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+          録音停止
+        </button>
+        <button class="btn-sm green" id="btnPause" onclick="togglePause()" disabled>
+          <svg id="pauseIcon" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+          <span id="pauseLabel">一時停止</span>
+        </button>
+        <button class="btn-sm blue" id="btnCopy" onclick="copySOAP()" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="copyIcon">
+            <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          <span id="copyLabel">要約コピー</span>
+        </button>
+        <button class="btn-sm dark" id="btnNext" onclick="nextPatient()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+          </svg>
+          次の診察
+        </button>
       </div>
-      <div>
-        <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px;">住所 <span style="color:var(--red);">*</span></div>
-        <input id="add-gym-address" type="text" placeholder="例：東京都渋谷区渋谷1-23-16"
-          style="width:100%;padding:11px 14px;border:1.5px solid var(--gray2);border-radius:12px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;" />
-      </div>
-      <button id="add-gym-btn" onclick="submitAddGym()"
-        style="width:100%;padding:14px;border-radius:14px;border:none;background:linear-gradient(135deg,var(--teal-mid),var(--teal));color:white;font-family:'Nunito',sans-serif;font-weight:900;font-size:15px;cursor:pointer;box-shadow:0 4px 16px rgba(6,182,170,0.35);">
-        登録する
+
+      <button class="btn-start" id="btnStart" onclick="startRec()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="2" width="6" height="11" rx="3"/>
+          <path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/>
+        </svg>
+        録音開始
       </button>
+
     </div>
   </div>
 </div>
 
 <script>
-// ── CONFIG ──
-const SUPABASE_URL = 'https://bjoqpyznqthdushpfboh.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJqb3FweXpucXRoZHVzaHBmYm9oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyODMxMTQsImV4cCI6MjA4ODg1OTExNH0.73lTJp3pHNYLCk-1RbLwKPtaEQT7cjH0ljT2vhitZWA';
-const MAPS_KEY = 'AIzaSyB6IglJtK5RUgqEWemqjrGlnVOF5xZIlZ8';
+let secs = 0, paused = false, timerInt = null, waveInt = null;
+let recognition = null, fullTranscript = '';
+const bars = document.querySelectorAll('.wb');
 
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-
-// ── STATE ──
-let gyms = [];
-let selectedLevel = null;
-let selectedGym = null;
-let activeCheckin = null;
-let map = null;
-let markers = [];
-let currentScreen = 'home';
-
-// ── SCREEN SWITCH ──
-function showScreen(name) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById('screen-' + name).classList.add('active');
-  currentScreen = name;
-  if (name === 'home') initMap();
-}
-
-// ── TOAST ──
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
-}
-
-// ── CROWD HELPERS ──
-function levelLabel(level) {
-  return { empty:'空いてる', normal:'普通', crowded:'混んでる' }[level] || '情報なし';
-}
-function levelIcon(level) {
-  return { empty:'😌', normal:'😐', crowded:'😤' }[level] || '🏋️';
-}
-function levelClass(level) {
-  return { empty:'badge-empty', normal:'badge-normal', crowded:'badge-crowded' }[level] || 'badge-none';
-}
-function levelColor(level) {
-  return { empty:'#3DD68C', normal:'#FFD166', crowded:'#FF6B6B' }[level] || '#E2EEEE';
-}
-function levelTextClass(level) {
-  return { empty:'text-green', normal:'text-yellow', crowded:'text-red' }[level] || '';
-}
-
-// ── LOAD GYMS ──
-async function loadGyms() {
-  const { data, error } = await db.from('gym_current_status').select('*');
-  if (error) {
-    // gym_current_status ビューがない場合は gyms テーブルにフォールバック
-    const { data: g2 } = await db.from('gyms').select('*');
-    gyms = (g2 || []).map(g => ({ ...g, gym_id: g.id, current_level: null, active_checkins: 0 }));
-  } else {
-    gyms = data || [];
-  }
-  renderGymList(gyms);
-  renderModalGymList(gyms);
-  renderMarkers();
-}
-
-// ── GYM LIST ──
-function renderGymList(list) {
-  const el = document.getElementById('gym-list');
-  const addBtn = document.getElementById('add-gym-area');
-  if (!list.length) {
-    el.innerHTML = '<div class="loading">ジムが見つかりません</div>';
-    addBtn.style.display = 'block';
-  } else {
-    el.innerHTML = list.map(g => `
-      <div class="gym-row" onclick="selectGymAndPost('${g.gym_id || g.id}')">
-        <div class="gym-icon">🏋️</div>
-        <div class="gym-info">
-          <div class="gym-name">${g.name}</div>
-          <div class="gym-dist">${g.address || '住所未登録'}</div>
-        </div>
-        <span class="crowd-badge ${levelClass(g.current_level)}">${levelLabel(g.current_level)}</span>
-      </div>
-    `).join('');
-    addBtn.style.display = 'none';
-  }
-}
-
-// ── SEARCH ──
-function initSearch() {
-  document.getElementById('search-input').addEventListener('input', () => {
-    filterGymListByBounds();
-  });
-}
-
-// ── GOOGLE MAPS ──
-function initMap() {
-  if (map) return;
-  if (!document.getElementById('map').offsetHeight) return;
-  map = new google.maps.Map(document.getElementById('map'), {
-    center: { lat: 35.6580, lng: 139.7016 },
-    zoom: 14,
-    disableDefaultUI: true,
-    zoomControl: true,
-    styles: [
-      { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
-      { elementType: 'labels', stylers: [{ visibility: 'off' }] },
-      { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
-      { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#e8e8e8' }] },
-      { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#dadada' }] },
-      { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#d9edf7' }] },
-      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-      { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#e8f5e9' }, { visibility: 'on' }] },
-      { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-      { featureType: 'administrative', stylers: [{ visibility: 'off' }] },
-    ]
-  });
-
-  // 現在地
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(pos => {
-      const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      map.setCenter(loc);
-      new google.maps.Marker({
-        position: loc, map,
-        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor:'#06B6AA', fillOpacity:1, strokeColor:'white', strokeWeight:3 }
-      });
-    });
-  }
-
-  // 地図の表示範囲が変わったらリストを更新
-  map.addListener('bounds_changed', () => {
-    filterGymListByBounds();
-  });
-
-  renderMarkers();
-}
-
-function renderMarkers() {
-  if (!map) return;
-  markers.forEach(m => m.setMap(null));
-  markers = [];
-  gyms.forEach(g => {
-    if (!g.lat || !g.lng) return;
-    const color = levelColor(g.current_level);
-    const marker = new google.maps.Marker({
-      position: { lat: g.lat, lng: g.lng }, map,
-      label: { text: g.name.substring(0,8), color:'white', fontSize:'10px', fontWeight:'700' },
-      icon: {
-        path: 'M 0,-18 C -10,-18 -18,-10 -18,0 C -18,12 0,28 0,28 C 0,28 18,12 18,0 C 18,-10 10,-18 0,-18 Z',
-        fillColor: color, fillOpacity:1, strokeColor:'white', strokeWeight:2, scale:1,
-        labelOrigin: new google.maps.Point(0, 2)
-      }
-    });
-    marker.addListener('click', () => openDetail(g.gym_id || g.id));
-    markers.push(marker);
-  });
-}
-
-// ── 地図範囲でジムを絞り込む ──
-function filterGymListByBounds() {
-  if (!map) return;
-  const bounds = map.getBounds();
-  if (!bounds) return;
-  const q = document.getElementById('search-input').value.trim().toLowerCase();
-  const inBounds = gyms.filter(g => {
-    if (!g.lat || !g.lng) return false;
-    if (!bounds.contains({ lat: g.lat, lng: g.lng })) return false;
-    if (q) return g.name.toLowerCase().includes(q) || (g.address||'').toLowerCase().includes(q);
-    return true;
-  });
-  renderGymList(inBounds);
-}
-
-// ── ジムタップ → 投稿画面へ直接遷移 ──
-function selectGymAndPost(gymId) {
-  selectedGym = gyms.find(g => (g.gym_id || g.id) === gymId);
-  updatePostGymDisplay();
-  showScreen('post');
-}
-
-// ── POST ──
-function selectLevel(level, el) {
-  document.querySelectorAll('.crowd-option').forEach(o => o.classList.remove('selected'));
-  el.classList.add('selected');
-  selectedLevel = level;
-  document.getElementById('submit-btn').disabled = !selectedGym;
-}
-
-async function submitReport() {
-  if (!selectedLevel || !selectedGym) { showToast('ジムとレベルを選択してください'); return; }
-  const btn = document.getElementById('submit-btn');
-  btn.disabled = true; btn.textContent = '投稿中...';
-
-  const gymId = selectedGym.gym_id || selectedGym.id;
-  const { error } = await db.from('crowd_reports').insert({
-    gym_id: gymId,
-    level: selectedLevel,
-    user_id: getAnonUserId()
-  });
-
-  if (error) {
-    showToast('投稿に失敗しました: ' + error.message);
-  } else {
-    showToast('投稿しました！ありがとう 🎉');
-    document.querySelectorAll('.crowd-option').forEach(o => o.classList.remove('selected'));
-    selectedLevel = null;
-    btn.disabled = true;
-    await loadGyms();
-  }
-  btn.textContent = '投稿する 🏋️';
-}
-
-// チェックイン
-async function doCheckin() {
-  if (!selectedGym) { showToast('ジムを選択してください'); return; }
-  const gymId = selectedGym.gym_id || selectedGym.id;
-  const userId = getAnonUserId();
-
-  const { data, error } = await db.from('checkins').insert({
-    gym_id: gymId, user_id: userId, is_active: true
-  }).select().single();
-
-  if (error) { showToast('チェックインに失敗しました'); return; }
-  activeCheckin = data;
-  localStorage.setItem('activeCheckin', JSON.stringify(data));
-  updateCheckinUI();
-  showToast('チェックインしました！ 📍');
-  await loadGyms();
-}
-
-async function doCheckout() {
-  if (!activeCheckin) return;
-  const { error } = await db.from('checkins').update({
-    is_active: false, checked_out_at: new Date().toISOString()
-  }).eq('id', activeCheckin.id);
-
-  if (error) { showToast('チェックアウトに失敗しました'); return; }
-  activeCheckin = null;
-  localStorage.removeItem('activeCheckin');
-  updateCheckinUI();
-  showToast('チェックアウトしました！お疲れ様 💪');
-  await loadGyms();
-}
-
-function updateCheckinUI() {
-  const activeWrap = document.getElementById('checkin-active-wrap');
-  const formWrap = document.getElementById('checkin-form-wrap');
-  if (activeCheckin) {
-    activeWrap.style.display = 'block';
-    formWrap.style.display = 'none';
-    const gym = gyms.find(g => (g.gym_id||g.id) === activeCheckin.gym_id);
-    document.getElementById('checkin-gym-display').textContent = gym ? gym.name : 'チェックイン中';
-  } else {
-    activeWrap.style.display = 'none';
-    formWrap.style.display = 'block';
-  }
-}
-
-// ── ADD GYM MODAL ──
-function openAddGymModal() {
-  document.getElementById('add-gym-modal').classList.add('open');
-  document.getElementById('add-gym-name').value = '';
-  document.getElementById('add-gym-address').value = '';
-}
-function closeAddGymModal(e) {
-  if (e.target === document.getElementById('add-gym-modal'))
-    document.getElementById('add-gym-modal').classList.remove('open');
-}
-
-async function submitAddGym() {
-  const name    = document.getElementById('add-gym-name').value.trim();
-  const address = document.getElementById('add-gym-address').value.trim();
-  if (!name)    { showToast('ジム名を入力してください'); return; }
-  if (!address) { showToast('住所を入力してください'); return; }
-
-  const btn = document.getElementById('add-gym-btn');
-  btn.textContent = '登録中...'; btn.disabled = true;
-
-  // Geocoding APIで住所→緯度経度変換
-  let lat = null, lng = null;
-  try {
-    const geo = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${MAPS_KEY}&language=ja`
-    );
-    const geoData = await geo.json();
-    if (geoData.results?.[0]?.geometry?.location) {
-      lat = geoData.results[0].geometry.location.lat;
-      lng = geoData.results[0].geometry.location.lng;
+// ── Web Speech API セットアップ ──
+function setupRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return null;
+  const r = new SR();
+  r.lang = 'ja-JP';
+  r.continuous = true;
+  r.interimResults = true;
+  r.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) { fullTranscript += t; }
+      else { interim = t; }
     }
-  } catch(e) { /* 緯度経度なしでも登録 */ }
+    document.getElementById('placeholder').style.display = 'none';
+    document.getElementById('transcribeText').textContent = fullTranscript + interim;
+    document.getElementById('transcribeBox').scrollTop = 9999;
+  };
+  r.onerror = (e) => { if (e.error !== 'no-speech') showError('音声認識エラー: ' + e.error); };
+  r.onend = () => { if (!paused && timerInt) r.start(); };
+  return r;
+}
 
-  const { error } = await db.from('gyms').insert({ name, address, lat, lng });
+// ── 録音開始 ──
+function startRec() {
+  fullTranscript = '';
+  secs = 0; paused = false;
+  document.getElementById('btnStart').style.display = 'none';
+  document.getElementById('soapResult').classList.remove('visible');
+  document.getElementById('generating').classList.remove('visible');
+  document.getElementById('errorMsg').classList.remove('visible');
+  document.getElementById('placeholder').style.display = 'inline';
+  document.getElementById('transcribeText').textContent = '';
+  document.getElementById('transcribeBox').classList.add('active');
+  document.getElementById('waveform').style.display = 'flex';
 
-  btn.textContent = '登録する'; btn.disabled = false;
+  setStatus('recording', '録音中');
+  document.getElementById('recBar').className = 'rec-bar recording';
+  document.getElementById('btnStop').disabled = false;
+  document.getElementById('btnPause').disabled = false;
+  document.getElementById('btnCopy').disabled = true;
 
-  if (error) {
-    showToast('登録に失敗しました: ' + error.message);
+  timerInt = setInterval(() => {
+    if (!paused) { secs++; updateTimer(); }
+  }, 1000);
+
+  waveInt = setInterval(() => {
+    bars.forEach(b => {
+      const h = paused ? 4 : Math.round(Math.random() * 18 + 4);
+      b.style.height = h + 'px';
+      b.className = 'wb' + (paused ? '' : ' active');
+    });
+  }, 130);
+
+  recognition = setupRecognition();
+  if (recognition) {
+    recognition.start();
   } else {
-    document.getElementById('add-gym-modal').classList.remove('open');
-    showToast('ジムを登録しました！ありがとう 🎉');
-    await loadGyms();
+    showError('このブラウザは音声認識に対応していません。Chromeをお使いください。');
   }
 }
 
-// ── GYM MODAL ──
-function renderModalGymList(list) {
-  document.getElementById('modal-gym-list').innerHTML = list.map(g => `
-    <div class="gym-row" onclick="selectGymFromModal('${g.gym_id||g.id}')">
-      <div class="gym-icon">🏋️</div>
-      <div class="gym-info">
-        <div class="gym-name">${g.name}</div>
-        <div class="gym-dist">${g.address||''}</div>
-      </div>
-      <span class="crowd-badge ${levelClass(g.current_level)}">${levelLabel(g.current_level)}</span>
-    </div>
-  `).join('');
+// ── 一時停止 / 再開 ──
+function togglePause() {
+  paused = !paused;
+  const icon = document.getElementById('pauseIcon');
+  const label = document.getElementById('pauseLabel');
+  if (paused) {
+    if (recognition) recognition.stop();
+    setStatus('paused', '一時停止中');
+    document.getElementById('recBar').className = 'rec-bar paused';
+    icon.innerHTML = '<polygon points="5,3 19,12 5,21"/>';
+    label.textContent = '再開';
+  } else {
+    if (recognition) recognition.start();
+    setStatus('recording', '録音中');
+    document.getElementById('recBar').className = 'rec-bar recording';
+    icon.innerHTML = '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>';
+    label.textContent = '一時停止';
+  }
 }
 
-function openGymModal() {
-  document.getElementById('gym-modal').classList.add('open');
-}
-function closeGymModal(e) {
-  if (e.target === document.getElementById('gym-modal'))
-    document.getElementById('gym-modal').classList.remove('open');
-}
-function selectGymFromModal(gymId) {
-  selectedGym = gyms.find(g => (g.gym_id||g.id) === gymId);
-  updatePostGymDisplay();
-  document.getElementById('gym-modal').classList.remove('open');
-  if (selectedLevel) document.getElementById('submit-btn').disabled = false;
+// ── 録音停止 → SOAP生成 ──
+function stopRec() {
+  clearInterval(timerInt); clearInterval(waveInt); timerInt = null;
+  if (recognition) { recognition.onend = null; recognition.stop(); }
+  paused = false;
+  bars.forEach(b => { b.style.height = '4px'; b.className = 'wb'; });
+  document.getElementById('waveform').style.display = 'none';
+  document.getElementById('transcribeBox').classList.remove('active');
+  document.getElementById('btnStop').disabled = true;
+  document.getElementById('btnPause').disabled = true;
+  setStatus('done', '生成中');
+  document.getElementById('recBar').className = 'rec-bar';
+  document.getElementById('generating').classList.add('visible');
+
+  generateSOAP(fullTranscript || document.getElementById('transcribeText').textContent);
 }
 
-function updatePostGymDisplay() {
-  if (!selectedGym) return;
-  document.getElementById('post-gym-name').textContent = selectedGym.name;
-  document.getElementById('post-gym-addr').textContent = selectedGym.address || '';
+// ── Claude API でSOAP生成 ──
+async function generateSOAP(transcript) {
+  if (!transcript.trim()) {
+    transcript = '（音声が取得できませんでした。テスト用サンプルを使用します）3日前から右膝が痛く、階段の昇降がつらいです。安静にすると少し楽になります。';
+  }
+  try {
+    const res = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcript })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    renderSOAP(data);
+  } catch (e) {
+    document.getElementById('generating').classList.remove('visible');
+    showError('SOAP生成に失敗しました: ' + e.message);
+    setStatus('idle', '待機中');
+    document.getElementById('btnStart').style.display = 'flex';
+  }
 }
 
-// ── TAB SWITCH ──
-function switchTab(tab) {
-  document.querySelectorAll('.mode-tab').forEach((t,i) => {
-    t.classList.toggle('active', (i===0&&tab==='button')||(i===1&&tab==='checkin'));
+function renderSOAP(data) {
+  document.getElementById('generating').classList.remove('visible');
+  ['S','O','A','P'].forEach(k => {
+    const el = document.getElementById('soap' + k);
+    const items = data[k] || [];
+    el.innerHTML = '<ul>' + items.map(i => '<li>' + escHtml(i) + '</li>').join('') + '</ul>';
   });
-  document.getElementById('tab-button').classList.toggle('active', tab==='button');
-  document.getElementById('tab-checkin').classList.toggle('active', tab==='checkin');
+  document.getElementById('soapResult').classList.add('visible');
+  document.getElementById('btnCopy').disabled = false;
+  setStatus('done', '生成完了');
 }
 
-// ── INVITE CODE ──
-const INVITE_CODE = 'gymsync2026';
-
-function checkInviteCode() {
-  const input = document.getElementById('invite-input').value.trim();
-  if (input === INVITE_CODE) {
-    localStorage.setItem('gymsync_authed', '1');
-    document.getElementById('screen-invite').classList.remove('active');
-  } else {
-    const el = document.getElementById('invite-input');
-    const err = document.getElementById('invite-error');
-    el.classList.add('error');
-    err.style.display = 'block';
-    setTimeout(() => { el.classList.remove('error'); err.style.display = 'none'; }, 2000);
-  }
+// ── コピー ──
+function copySOAP() {
+  const sections = { S: '主観的情報', O: '客観的情報', A: '評価', P: '計画' };
+  let text = '【SOAP】\n';
+  ['S','O','A','P'].forEach(k => {
+    const el = document.getElementById('soap' + k);
+    const items = Array.from(el.querySelectorAll('li')).map(li => '・' + li.textContent);
+    text += '\n' + sections[k] + '（' + k + '）:\n' + items.join('\n') + '\n';
+  });
+  navigator.clipboard.writeText(text.trim()).catch(() => {});
+  const lbl = document.getElementById('copyLabel');
+  const ico = document.getElementById('copyIcon');
+  lbl.textContent = 'コピー済み';
+  ico.innerHTML = '<polyline points="20 6 9 17 4 12"/>';
+  setTimeout(() => {
+    lbl.textContent = '要約コピー';
+    ico.innerHTML = '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>';
+  }, 2200);
 }
 
-// ── ANON USER ID ──
-function getAnonUserId() {
-  let id = localStorage.getItem('gymsync_anon_id');
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem('gymsync_anon_id', id);
-  }
-  return id;
+// ── 次の診察（リセット） ──
+function nextPatient() {
+  clearInterval(timerInt); clearInterval(waveInt); timerInt = null;
+  if (recognition) { recognition.onend = null; recognition.stop(); }
+  secs = 0; paused = false; fullTranscript = '';
+  bars.forEach(b => { b.style.height = '4px'; b.className = 'wb'; });
+  document.getElementById('waveform').style.display = 'flex';
+  document.getElementById('soapResult').classList.remove('visible');
+  document.getElementById('generating').classList.remove('visible');
+  document.getElementById('errorMsg').classList.remove('visible');
+  document.getElementById('transcribeBox').classList.remove('active');
+  document.getElementById('placeholder').style.display = 'inline';
+  document.getElementById('transcribeText').textContent = '';
+  document.getElementById('recBar').className = 'rec-bar';
+  document.getElementById('btnStop').disabled = true;
+  document.getElementById('btnPause').disabled = true;
+  document.getElementById('btnCopy').disabled = true;
+  document.getElementById('pauseIcon').innerHTML = '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>';
+  document.getElementById('pauseLabel').textContent = '一時停止';
+  document.getElementById('timerText').textContent = '';
+  setStatus('idle', '待機中');
+  document.getElementById('btnStart').style.display = 'flex';
 }
 
-// ── INIT ──
-window.addEventListener('load', async () => {
-  // 招待コード認証チェック
-  if (!localStorage.getItem('gymsync_authed')) {
-    document.getElementById('screen-invite').classList.add('active');
-  }
+function setStatus(state, label) {
+  const chip = document.getElementById('statusChip');
+  chip.className = 'status-chip ' + state;
+  document.getElementById('statusLabel').textContent = label;
+}
 
-  initSearch();
+function updateTimer() {
+  const m = Math.floor(secs / 60), s = String(secs % 60).padStart(2, '0');
+  document.getElementById('timerText').textContent = m + ':' + s;
+}
 
-  // チェックイン状態を復元
-  const saved = localStorage.getItem('activeCheckin');
-  if (saved) { activeCheckin = JSON.parse(saved); updateCheckinUI(); }
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg;
+  el.classList.add('visible');
+}
 
-  await loadGyms();
-});
-
-// Maps API callback
-window.initMapCallback = initMap;
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 </script>
-
-<!-- Google Maps -->
-<script async defer
-  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB6IglJtK5RUgqEWemqjrGlnVOF5xZIlZ8&callback=initMapCallback&language=ja">
-</script>
-
 </body>
 </html>
