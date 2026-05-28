@@ -48,11 +48,17 @@ if (!empty($audioData)) {
     error_log("tmpFile: " . $tmpFile . " ext: " . $ext . " audioType: " . $audioType . " size: " . filesize($tmpFile));
 
     // ② Whisper APIで文字起こし（multipart/form-dataを手動で構築）
-    $boundary    = uniqid();
+    $whisperFileName = 'audio.' . $ext;
+    $whisperMime     = 'audio/mp4';
+    if (strpos($audioType, 'mp3') !== false)       { $whisperFileName = 'audio.mp3';  $whisperMime = 'audio/mpeg'; }
+    elseif (strpos($audioType, 'wav') !== false)   { $whisperFileName = 'audio.wav';  $whisperMime = 'audio/wav'; }
+    elseif (strpos($audioType, 'webm') !== false)  { $whisperFileName = 'audio.webm'; $whisperMime = 'audio/webm'; }
+
+    $boundary     = uniqid();
     $fileContents = file_get_contents($tmpFile);
     $body = "--{$boundary}\r\n"
-        . "Content-Disposition: form-data; name=\"file\"; filename=\"audio.m4a\"\r\n"
-        . "Content-Type: audio/mp4\r\n\r\n"
+        . "Content-Disposition: form-data; name=\"file\"; filename=\"{$whisperFileName}\"\r\n"
+        . "Content-Type: {$whisperMime}\r\n\r\n"
         . $fileContents . "\r\n"
         . "--{$boundary}\r\n"
         . "Content-Disposition: form-data; name=\"model\"\r\n\r\n"
