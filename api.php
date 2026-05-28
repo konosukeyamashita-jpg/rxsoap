@@ -12,6 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); echo json_
 
 // APIキーはGitHub Actionsでデプロイ時に置換される
 $apiKey = '__ANTHROPIC_API_KEY__';
+$openaiApiKey = '__OPENAI_API_KEY__';
 
 if (empty($apiKey) || $apiKey === '__ANTHROPIC_API_KEY__') {
     http_response_code(500);
@@ -30,6 +31,57 @@ if (empty($transcript) && empty($audioData)) {
     exit;
 }
 
+if (!empty($audioData)) {
+    error_log("audio_type: " . $audioType . " audio_data length: " . strlen($audioData));
+
+    // ① base64デコードして一時ファイルに保存
+    $tmpFile = tempnam(sys_get_temp_dir(), 'audio_');
+    file_put_contents($tmpFile, base64_decode($audioData));
+
+    // ② Whisper APIで文字起こし
+    $whisperCh = curl_init('https://api.openai.com/v1/audio/transcriptions');
+    curl_setopt_array($whisperCh, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $openaiApiKey],
+        CURLOPT_POSTFIELDS     => [
+            'file'     => new CURLFile($tmpFile, $audioType, 'audio.m4a'),
+            'model'    => 'whisper-1',
+            'language' => 'ja',
+        ],
+        CURLOPT_TIMEOUT => 120,
+    ]);
+    $whisperResponse = curl_exec($whisperCh);
+    $whisperCode     = curl_getinfo($whisperCh, CURLINFO_HTTP_CODE);
+    $whisperCurlErr  = curl_error($whisperCh);
+    curl_close($whisperCh);
+
+    // ③ 一時ファイルを削除
+    unlink($tmpFile);
+
+    error_log("whisper_code: " . $whisperCode . " response: " . substr($whisperResponse, 0, 300));
+
+    if ($whisperCode !== 200) {
+        http_response_code(502);
+        echo json_encode([
+            'error'         => 'Whisper API エラー: HTTP ' . $whisperCode,
+            'response_body' => substr($whisperResponse, 0, 1000),
+            'curl_error'    => $whisperCurlErr,
+        ]);
+        exit;
+    }
+
+    $whisperData = json_decode($whisperResponse, true);
+    $transcript  = $whisperData['text'] ?? '';
+
+    if (empty($transcript)) {
+        http_response_code(500);
+        echo json_encode(['error' => '音声の文字起こしに失敗しました']);
+        exit;
+    }
+}
+
+// ④ transcriptをClaudeに渡してSOAP生成
 $prompt = <<<PROMPT
 あなたは婦人科専門クリニックの医療記録専門家です。
 以下の診察音声の書き起こしを読み、SOAP形式でカルテを作成してください。
@@ -65,42 +117,7 @@ P（計画）：以下の4項目を必ず含めること
 }
 PROMPT;
 
-if (!empty($audioData)) {
-    error_log("audio_type: " . $audioType . " audio_data length: " . strlen($audioData));
-    $audioPrompt = <<<APROMPT
-あなたは婦人科専門クリニックの医療記録専門家です。
-添付の音声ファイルの診察内容をSOAP形式でカルテにまとめてください。
-
-【出力形式】
-S（主訴・現病歴）：患者の訴え、症状の経過、既往歴など主観的情報
-O（所見・検査）：医師が確認した客観的所見、検査結果、バイタル等
-A（評価・アセスメント）：医師の診断・鑑別診断・病態評価
-P（計画）：以下の4項目を必ず含めること
-  ・処方内容（薬剤名・用量・用法・日数）
-  ・処置内容（当日実施した検査・注射等）
-  ・次回受診（時期・条件・確認事項を具体的に）
-  ・患者指導（生活指導、検診指示、注意事項）
-
-【注意事項】
-・医療用語は正式名称で記載（略語は初出時にフルスペル併記）
-・処方内容は薬剤名、用量、用法を具体的に記載
-・会話の全体を通じて漏れなく情報を拾うこと（特に会話終盤のフォロー指示を見落とさない）
-・会話中に明示されていない情報を補完する場合は【推定】と明記すること
-・音声認識の誤認識は文脈から正しい医療用語に修正すること
-・カルテ本文のみを出力すること。説明文・前置き・後書きは一切不要
-・情報がない項目は「情報なし」と記載すること
-APROMPT;
-
-    $messages = [[
-        'role'    => 'user',
-        'content' => [
-            ['type' => 'document', 'source' => ['type' => 'base64', 'media_type' => $audioType, 'data' => $audioData]],
-            ['type' => 'text',     'text'   => $audioPrompt]
-        ]
-    ]];
-} else {
-    $messages = [['role' => 'user', 'content' => $prompt]];
-}
+$messages = [['role' => 'user', 'content' => $prompt]];
 
 $payload = json_encode([
     'model'      => 'claude-sonnet-4-20250514',
@@ -143,11 +160,6 @@ $apiData = json_decode($response, true);
 $text = $apiData['content'][0]['text'] ?? '';
 
 $text = trim(preg_replace('/```json|```/', '', $text));
-
-if (!empty($audioData)) {
-    echo json_encode(['soapText' => $text], JSON_UNESCAPED_UNICODE);
-    exit;
-}
 
 $soap = json_decode($text, true);
 

@@ -22,10 +22,12 @@ jobs:
       - name: Replace API key placeholder
         run: |
           python3 -c "
-          api_key = '${{ secrets.PRODUCT_DEV_ANTHROPIC_API_KEY }}'
+          api_key    = '${{ secrets.PRODUCT_DEV_ANTHROPIC_API_KEY }}'
+          openai_key = '${{ secrets.OPENAI_API_KEY }}'
           with open('api.php', 'r') as f:
               content = f.read()
           content = content.replace(\"\$apiKey = '__ANTHROPIC_API_KEY__';\", \"\$apiKey = '\" + api_key + \"';\")
+          content = content.replace(\"\$openaiApiKey = '__OPENAI_API_KEY__';\", \"\$openaiApiKey = '\" + openai_key + \"';\")
           with open('api.php', 'w') as f:
               f.write(content)
           "
