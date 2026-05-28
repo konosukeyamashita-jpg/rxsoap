@@ -35,8 +35,17 @@ if (!empty($audioData)) {
     error_log("audio_type: " . $audioType . " audio_data length: " . strlen($audioData));
 
     // ① base64デコードして一時ファイルに保存
-    $tmpFile = tempnam(sys_get_temp_dir(), 'audio_');
+    $ext = 'm4a';
+    if (strpos($audioType, 'mp3') !== false) $ext = 'mp3';
+    elseif (strpos($audioType, 'mp4') !== false) $ext = 'mp4';
+    elseif (strpos($audioType, 'wav') !== false) $ext = 'wav';
+    elseif (strpos($audioType, 'ogg') !== false) $ext = 'ogg';
+    elseif (strpos($audioType, 'webm') !== false) $ext = 'webm';
+
+    $tmpFile = tempnam(sys_get_temp_dir(), 'audio_') . '.' . $ext;
     file_put_contents($tmpFile, base64_decode($audioData));
+
+    $curlFile = new CURLFile($tmpFile, $audioType, 'audio.' . $ext);
 
     // ② Whisper APIで文字起こし
     $whisperCh = curl_init('https://api.openai.com/v1/audio/transcriptions');
@@ -45,7 +54,7 @@ if (!empty($audioData)) {
         CURLOPT_POST           => true,
         CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $openaiApiKey],
         CURLOPT_POSTFIELDS     => [
-            'file'     => new CURLFile($tmpFile, $audioType, 'audio.m4a'),
+            'file'     => $curlFile,
             'model'    => 'whisper-1',
             'language' => 'ja',
         ],
