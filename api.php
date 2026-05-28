@@ -47,27 +47,32 @@ if (!empty($audioData)) {
     file_put_contents($tmpFile, base64_decode($audioData));
     error_log("tmpFile: " . $tmpFile . " ext: " . $ext . " audioType: " . $audioType . " size: " . filesize($tmpFile));
 
-    // Whisper APIはaudio/x-m4aを認識しないためaudio/mp4に統一
-    $whisperMimeType = 'audio/mp4';
-    if (strpos($audioType, 'mp3') !== false) $whisperMimeType = 'audio/mpeg';
-    elseif (strpos($audioType, 'wav') !== false) $whisperMimeType = 'audio/wav';
-    elseif (strpos($audioType, 'ogg') !== false) $whisperMimeType = 'audio/ogg';
-    elseif (strpos($audioType, 'webm') !== false) $whisperMimeType = 'audio/webm';
+    // ② Whisper APIで文字起こし（multipart/form-dataを手動で構築）
+    $boundary    = uniqid();
+    $fileContents = file_get_contents($tmpFile);
+    $body = "--{$boundary}\r\n"
+        . "Content-Disposition: form-data; name=\"file\"; filename=\"audio.m4a\"\r\n"
+        . "Content-Type: audio/mp4\r\n\r\n"
+        . $fileContents . "\r\n"
+        . "--{$boundary}\r\n"
+        . "Content-Disposition: form-data; name=\"model\"\r\n\r\n"
+        . "whisper-1\r\n"
+        . "--{$boundary}\r\n"
+        . "Content-Disposition: form-data; name=\"language\"\r\n\r\n"
+        . "ja\r\n"
+        . "--{$boundary}--\r\n";
 
-    $curlFile = new CURLFile($tmpFile, $whisperMimeType, 'audio.' . $ext);
-
-    // ② Whisper APIで文字起こし
     $whisperCh = curl_init('https://api.openai.com/v1/audio/transcriptions');
     curl_setopt_array($whisperCh, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST           => true,
-        CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $openaiApiKey],
-        CURLOPT_POSTFIELDS     => [
-            'file'     => $curlFile,
-            'model'    => 'whisper-1',
-            'language' => 'ja',
+        CURLOPT_HTTPHEADER     => [
+            'Authorization: Bearer ' . $openaiApiKey,
+            'Content-Type: multipart/form-data; boundary=' . $boundary,
+            'Content-Length: ' . strlen($body),
         ],
-        CURLOPT_TIMEOUT => 120,
+        CURLOPT_POSTFIELDS     => $body,
+        CURLOPT_TIMEOUT        => 60,
     ]);
     $whisperResponse = curl_exec($whisperCh);
     $whisperHttpCode = curl_getinfo($whisperCh, CURLINFO_HTTP_CODE);
