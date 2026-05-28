@@ -67,9 +67,6 @@ if (!empty($audioData)) {
     $whisperCurlErr  = curl_error($whisperCh);
     curl_close($whisperCh);
 
-    // ③ 一時ファイルを削除
-    unlink($tmpFile);
-
     error_log("whisper http: " . $whisperHttpCode . " response: " . substr($whisperResponse, 0, 200));
 
     if ($whisperHttpCode !== 200) {
@@ -78,9 +75,17 @@ if (!empty($audioData)) {
             'error'         => 'Whisper API エラー: HTTP ' . $whisperHttpCode,
             'response_body' => substr($whisperResponse, 0, 1000),
             'curl_error'    => $whisperCurlErr,
+            'tmp_file'      => $tmpFile,
+            'ext'           => $ext,
+            'audio_type'    => $audioType,
+            'file_exists'   => file_exists($tmpFile) ? 'yes' : 'no (already deleted)',
+            'file_size'     => strlen(base64_decode($audioData)),
         ]);
         exit;
     }
+
+    // ③ 一時ファイルを削除
+    unlink($tmpFile);
 
     $whisperData = json_decode($whisperResponse, true);
     $transcript  = $whisperData['text'] ?? '';
