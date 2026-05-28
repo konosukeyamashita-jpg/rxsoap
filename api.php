@@ -1,6 +1,7 @@
 <?php
 ini_set('display_errors', 1);
 ini_set('log_errors', 1);
+ini_set('error_log', __DIR__ . '/debug.log');
 error_log("rxsoap api.php called");
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
