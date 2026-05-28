@@ -124,12 +124,19 @@ curl_setopt_array($ch, [
 
 $response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$curlError = curl_error($ch);
 curl_close($ch);
 error_log("http_code: " . $httpCode . " response: " . substr($response, 0, 500));
 
 if ($httpCode !== 200) {
     http_response_code(502);
-    echo json_encode(['error' => 'Claude API エラー: HTTP ' . $httpCode]);
+    echo json_encode([
+        'error'         => 'Claude API エラー: HTTP ' . $httpCode,
+        'response_body' => substr($response, 0, 1000),
+        'audio_type'    => $audioType,
+        'audio_size'    => strlen($audioData),
+        'curl_error'    => $curlError
+    ]);
     exit;
 }
 
