@@ -44,6 +44,7 @@ if (!empty($audioData)) {
 
     $tmpFile = tempnam(sys_get_temp_dir(), 'audio_') . '.' . $ext;
     file_put_contents($tmpFile, base64_decode($audioData));
+    error_log("tmpFile: " . $tmpFile . " ext: " . $ext . " audioType: " . $audioType . " size: " . filesize($tmpFile));
 
     $curlFile = new CURLFile($tmpFile, $audioType, 'audio.' . $ext);
 
@@ -61,19 +62,19 @@ if (!empty($audioData)) {
         CURLOPT_TIMEOUT => 120,
     ]);
     $whisperResponse = curl_exec($whisperCh);
-    $whisperCode     = curl_getinfo($whisperCh, CURLINFO_HTTP_CODE);
+    $whisperHttpCode = curl_getinfo($whisperCh, CURLINFO_HTTP_CODE);
     $whisperCurlErr  = curl_error($whisperCh);
     curl_close($whisperCh);
 
     // ③ 一時ファイルを削除
     unlink($tmpFile);
 
-    error_log("whisper_code: " . $whisperCode . " response: " . substr($whisperResponse, 0, 300));
+    error_log("whisper http: " . $whisperHttpCode . " response: " . substr($whisperResponse, 0, 200));
 
-    if ($whisperCode !== 200) {
+    if ($whisperHttpCode !== 200) {
         http_response_code(502);
         echo json_encode([
-            'error'         => 'Whisper API エラー: HTTP ' . $whisperCode,
+            'error'         => 'Whisper API エラー: HTTP ' . $whisperHttpCode,
             'response_body' => substr($whisperResponse, 0, 1000),
             'curl_error'    => $whisperCurlErr,
         ]);
