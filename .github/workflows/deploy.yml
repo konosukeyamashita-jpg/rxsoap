@@ -1,0 +1,43 @@
+name: Deploy rxsoap
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy-product:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SAKURA_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SAKURA_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Replace API key placeholder
+        run: |
+          python3 -c "
+          with open('api.php', 'r') as f:
+              content = f.read()
+          content = content.replace('__ANTHROPIC_API_KEY__', '${{ secrets.PRODUCT_DEV_ANTHROPIC_API_KEY }}')
+          with open('api.php', 'w') as f:
+              f.write(content)
+          "
+
+      - name: Create directory on server
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+            ${{ secrets.SAKURA_USER }}@${{ secrets.SAKURA_HOST }} \
+            "mkdir -p ~/www/product/rxsoap"
+
+      - name: Deploy files
+        run: |
+          scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+            index.html \
+            api.php \
+            ${{ secrets.SAKURA_USER }}@${{ secrets.SAKURA_HOST }}:~/www/product/rxsoap/
