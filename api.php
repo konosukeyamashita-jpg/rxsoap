@@ -43,7 +43,12 @@ if (!empty($audioData)) {
     elseif (strpos($audioType, 'ogg') !== false) $ext = 'ogg';
     elseif (strpos($audioType, 'webm') !== false) $ext = 'webm';
 
-    $tmpFile = tempnam(sys_get_temp_dir(), 'audio_') . '.' . $ext;
+    // x-m4aはmp4として処理
+    $tmpExt = $ext;
+    if ($audioType === 'audio/x-m4a' || $audioType === 'audio/m4a') {
+        $tmpExt = 'mp4';
+    }
+    $tmpFile = tempnam(sys_get_temp_dir(), 'audio_') . '.' . $tmpExt;
     file_put_contents($tmpFile, base64_decode($audioData));
     error_log("tmpFile: " . $tmpFile . " ext: " . $ext . " audioType: " . $audioType . " size: " . filesize($tmpFile));
 
