@@ -449,11 +449,11 @@
         </div>
       </div>
 
-      <div class="meta-row">
+      <div class="meta-row" style="display:none">
         <span class="meta-label">テンプレート</span>
         <span class="meta-val">SOAPサマリー形式</span>
       </div>
-      <div class="meta-row">
+      <div class="meta-row" style="display:none">
         <span class="meta-label">マイク</span>
         <select id="micSelect" style="font-size:11px; border:0.5px solid var(--border);
           border-radius:4px; padding:2px 4px; background:var(--surface);
@@ -461,7 +461,7 @@
         </select>
       </div>
 
-      <div class="btn-grid">
+      <div class="btn-grid" id="btnGrid" style="display:none">
         <button class="btn-sm red" id="btnStop" onclick="stopRec()" disabled>
           <svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
           録音停止
@@ -525,7 +525,6 @@ const bars = document.querySelectorAll('.wb');
 // ── 録音開始 ──
 async function startRec() {
   secs = 0; paused = false; recordedChunks = [];
-  document.getElementById('btnStart').style.display = 'none';
   document.getElementById('fileUploadArea').style.display = 'none';
   document.getElementById('soapResult').classList.remove('visible');
   document.getElementById('generating').classList.remove('visible');
@@ -537,9 +536,7 @@ async function startRec() {
 
   setStatus('recording', '録音中');
   document.getElementById('recBar').className = 'rec-bar recording';
-  document.getElementById('btnStop').disabled = false;
-  document.getElementById('btnPause').disabled = false;
-  document.getElementById('btnCopy').disabled = true;
+  setButtonState('recording');
 
   timerInt = setInterval(() => {
     if (!paused) { secs++; updateTimer(); }
@@ -568,12 +565,10 @@ async function startRec() {
   } catch (e) {
     clearInterval(timerInt); clearInterval(waveInt); timerInt = null;
     showError('マイクへのアクセスを許可してください');
-    document.getElementById('btnStart').style.display = 'flex';
     document.getElementById('fileUploadArea').style.display = 'block';
-    document.getElementById('btnStop').disabled = true;
-    document.getElementById('btnPause').disabled = true;
     setStatus('idle', '待機中');
     document.getElementById('recBar').className = 'rec-bar';
+    setButtonState('idle');
   }
 }
 
@@ -604,8 +599,7 @@ function stopRec() {
   bars.forEach(b => { b.style.height = '4px'; b.className = 'wb'; });
   document.getElementById('waveform').style.display = 'none';
   document.getElementById('transcribeBox').classList.remove('active');
-  document.getElementById('btnStop').disabled = true;
-  document.getElementById('btnPause').disabled = true;
+  document.getElementById('btnGrid').style.display = 'none';
   setStatus('done', '生成中');
   document.getElementById('recBar').className = 'rec-bar';
   document.getElementById('generating').classList.add('visible');
@@ -639,8 +633,8 @@ function onRecordingStop() {
       document.getElementById('generating').classList.remove('visible');
       showError('SOAP生成に失敗しました: ' + err.message);
       setStatus('idle', '待機中');
-      document.getElementById('btnStart').style.display = 'flex';
       document.getElementById('fileUploadArea').style.display = 'block';
+      setButtonState('idle');
     }
   };
   reader.readAsDataURL(blob);
@@ -662,8 +656,8 @@ function renderSOAP(data) {
     document.getElementById('soapTextBlock').style.display = 'none';
   }
   document.getElementById('soapResult').classList.add('visible');
-  document.getElementById('btnCopy').disabled = false;
   setStatus('done', '生成完了');
+  setButtonState('done');
   document.getElementById('transcribeLabel').style.display = 'none';
   document.getElementById('transcribeBox').style.display = 'none';
   document.getElementById('waveform').style.display = 'none';
@@ -705,7 +699,6 @@ function nextPatient() {
   if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
   secs = 0; paused = false; recordedChunks = [];
   bars.forEach(b => { b.style.height = '4px'; b.className = 'wb'; });
-  document.getElementById('waveform').style.display = 'flex';
   document.getElementById('soapResult').classList.remove('visible');
   document.getElementById('generating').classList.remove('visible');
   document.getElementById('errorMsg').classList.remove('visible');
@@ -716,20 +709,41 @@ function nextPatient() {
   document.getElementById('transcribeText').textContent = '';
   document.getElementById('recBar').className = 'rec-bar';
   document.getElementById('waveform').style.display = 'flex';
-  document.getElementById('btnStop').disabled = true;
-  document.getElementById('btnPause').disabled = true;
-  document.getElementById('btnCopy').disabled = true;
   document.getElementById('pauseIcon').innerHTML = '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>';
   document.getElementById('pauseLabel').textContent = '一時停止';
   document.getElementById('timerText').textContent = '';
   setStatus('idle', '待機中');
-  document.getElementById('btnStart').style.display = 'flex';
   document.getElementById('fileUploadArea').style.display = 'block';
+  setButtonState('idle');
   document.getElementById('fileInput').value = '';
   document.getElementById('fileName').textContent = '（未選択）';
   document.getElementById('fileName').classList.remove('has-file');
   document.getElementById('btnGenerate').disabled = true;
   selectedFile = null;
+}
+
+function setButtonState(state) {
+  const grid = document.getElementById('btnGrid');
+  const btnStart = document.getElementById('btnStart');
+  [document.getElementById('btnStop'), document.getElementById('btnPause'),
+   document.getElementById('btnCopy'), document.getElementById('btnNext')].forEach(b => b.style.display = 'none');
+
+  if (state === 'idle') {
+    grid.style.display = 'none';
+    btnStart.style.display = 'flex';
+  } else if (state === 'recording' || state === 'paused') {
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = '1fr 1fr';
+    btnStart.style.display = 'none';
+    document.getElementById('btnStop').style.display = '';
+    document.getElementById('btnPause').style.display = '';
+  } else if (state === 'done') {
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = '1fr 1fr';
+    btnStart.style.display = 'none';
+    document.getElementById('btnCopy').style.display = '';
+    document.getElementById('btnNext').style.display = '';
+  }
 }
 
 function setStatus(state, label) {
