@@ -43,4 +43,6 @@ jobs:
           scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
             index.html \
             api.php \
+            manifest.json \
+            favicon.svg \
             ${{ secrets.SAKURA_USER }}@${{ secrets.SAKURA_HOST }}:~/www/product/rxsoap/
