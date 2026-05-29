@@ -1,8 +1,4 @@
 <?php
-ini_set('display_errors', 1);
-ini_set('log_errors', 1);
-ini_set('error_log', __DIR__ . '/debug.log');
-error_log("rxsoap api.php called");
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -33,8 +29,6 @@ if (empty($transcript) && empty($audioData)) {
 }
 
 if (!empty($audioData)) {
-    error_log("audio_type: " . $audioType . " audio_data length: " . strlen($audioData));
-
     // ① base64デコードして一時ファイルに保存
     $ext = 'm4a';
     if (strpos($audioType, 'mp3') !== false) $ext = 'mp3';
@@ -50,7 +44,6 @@ if (!empty($audioData)) {
     }
     $tmpFile = tempnam(sys_get_temp_dir(), 'audio_') . '.' . $tmpExt;
     file_put_contents($tmpFile, base64_decode($audioData));
-    error_log("tmpFile: " . $tmpFile . " ext: " . $ext . " audioType: " . $audioType . " size: " . filesize($tmpFile));
 
     // ② Whisper APIで文字起こし（multipart/form-dataを手動で構築）
     $whisperFileName = 'audio.' . $ext;
@@ -90,21 +83,15 @@ if (!empty($audioData)) {
     $whisperCurlErr  = curl_error($whisperCh);
     curl_close($whisperCh);
 
-    error_log("whisper http: " . $whisperHttpCode . " response: " . substr($whisperResponse, 0, 200));
-
     if ($whisperHttpCode !== 200) {
         http_response_code(502);
         echo json_encode([
-            'error'            => 'Whisper API エラー: HTTP ' . $whisperHttpCode,
-            'response_body'    => substr($whisperResponse, 0, 1000),
-            'curl_error'       => $whisperCurlErr,
-            'audio_type'       => $audioType,
-            'audio_data_size'  => strlen($audioData),
-            'file_size'        => strlen(base64_decode($audioData)),
-            'ext'              => $ext,
-            'whisper_filename' => $whisperFileName,
-            'whisper_mime'     => $whisperMime,
-            'file_exists'      => file_exists($tmpFile) ? 'yes' : 'no (already deleted)',
+            'error'         => 'Whisper API エラー: HTTP ' . $whisperHttpCode,
+            'response_body' => substr($whisperResponse, 0, 1000),
+            'curl_error'    => $whisperCurlErr,
+            'audio_type'    => $audioType,
+            'ext'           => $ext,
+            'file_exists'   => file_exists($tmpFile) ? 'yes' : 'no (already deleted)',
         ]);
         exit;
     }
@@ -183,15 +170,12 @@ $response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 $curlError = curl_error($ch);
 curl_close($ch);
-error_log("http_code: " . $httpCode . " response: " . substr($response, 0, 500));
 
 if ($httpCode !== 200) {
     http_response_code(502);
     echo json_encode([
         'error'         => 'Claude API エラー: HTTP ' . $httpCode,
         'response_body' => substr($response, 0, 1000),
-        'audio_type'    => $audioType,
-        'audio_size'    => strlen($audioData),
         'curl_error'    => $curlError
     ]);
     exit;
@@ -211,10 +195,9 @@ if (!$soap || !isset($soap['S'])) {
 }
 
 echo json_encode([
-    'S'                  => $soap['S'],
-    'O'                  => $soap['O'],
-    'A'                  => $soap['A'],
-    'P'                  => $soap['P'],
-    'transcript'         => $transcript,
-    'whisper_transcript' => $transcript,
+    'S'          => $soap['S'],
+    'O'          => $soap['O'],
+    'A'          => $soap['A'],
+    'P'          => $soap['P'],
+    'transcript' => $transcript,
 ], JSON_UNESCAPED_UNICODE);
