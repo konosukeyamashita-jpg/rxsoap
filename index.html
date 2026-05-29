@@ -426,6 +426,11 @@
 
       <div class="error-msg" id="errorMsg"></div>
 
+      <div id="referralResult" style="display:none; margin-bottom:10px;">
+        <div style="font-size:10px; font-weight:600; letter-spacing:0.08em; color:var(--text-hint); margin-bottom:6px;">紹介状</div>
+        <div id="referralText" style="font-size:12px; color:var(--text); line-height:1.7; background:#fafafa; border:0.5px solid var(--border); border-radius:var(--radius-sm); padding:10px; max-height:280px; overflow-y:auto; white-space:pre-wrap;"></div>
+      </div>
+
       <div class="soap-result" id="soapResult">
         <div id="soapTextBlock" style="display:none">
           <pre class="soap-text-pre" id="soapTextPre"></pre>
@@ -464,6 +469,10 @@
           <button id="btnSaishin" onclick="setVisitType('saishin')"
             style="font-size:11px; padding:3px 10px; border-radius:4px; border:0.5px solid var(--border); cursor:pointer; background:var(--surface); color:var(--text-muted);">
             再診
+          </button>
+          <button id="btnReferral" onclick="setVisitType('referral')"
+            style="font-size:11px; padding:3px 10px; border-radius:4px; border:0.5px solid var(--border); cursor:pointer; background:var(--surface); color:var(--text-muted);">
+            紹介状
           </button>
         </div>
       </div>
@@ -544,10 +553,11 @@ let visitType = 'shinsin';
 
 function setVisitType(type) {
   visitType = type;
-  document.getElementById('btnShinsin').style.background = type === 'shinsin' ? '#1a9e7a' : 'var(--surface)';
-  document.getElementById('btnShinsin').style.color     = type === 'shinsin' ? '#fff' : 'var(--text-muted)';
-  document.getElementById('btnSaishin').style.background = type === 'saishin' ? '#1a9e7a' : 'var(--surface)';
-  document.getElementById('btnSaishin').style.color     = type === 'saishin' ? '#fff' : 'var(--text-muted)';
+  ['shinsin', 'saishin', 'referral'].forEach(t => {
+    const btn = document.getElementById('btn' + t.charAt(0).toUpperCase() + t.slice(1));
+    btn.style.background = type === t ? '#1a9e7a' : 'var(--surface)';
+    btn.style.color      = type === t ? '#fff' : 'var(--text-muted)';
+  });
 }
 const bars = document.querySelectorAll('.wb');
 
@@ -657,7 +667,7 @@ function onRecordingStop() {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      renderSOAP(data);
+      if (data.referralText) renderReferral(data); else renderSOAP(data);
     } catch (err) {
       document.getElementById('generating').classList.remove('visible');
       showError('SOAP生成に失敗しました: ' + err.message);
@@ -690,6 +700,21 @@ function renderSOAP(data) {
   }
   document.getElementById('soapResult').classList.add('visible');
   document.getElementById('btnCopy').disabled = false;
+  setStatus('done', '生成完了');
+  setButtonState('done');
+  document.getElementById('waveform').style.display = 'none';
+  document.getElementById('fileUploadArea').style.display = 'none';
+}
+
+function renderReferral(data) {
+  document.getElementById('generating').classList.remove('visible');
+  if (data.transcript) {
+    document.getElementById('placeholder').style.display = 'none';
+    document.getElementById('transcribeText').textContent = data.transcript;
+  }
+  document.getElementById('referralText').textContent = data.referralText;
+  document.getElementById('referralResult').style.display = 'block';
+  document.getElementById('soapResult').classList.remove('visible');
   setStatus('done', '生成完了');
   setButtonState('done');
   document.getElementById('waveform').style.display = 'none';
@@ -732,6 +757,7 @@ function nextPatient() {
   secs = 0; paused = false; recordedChunks = [];
   bars.forEach(b => { b.style.height = '4px'; b.className = 'wb'; });
   document.getElementById('soapResult').classList.remove('visible');
+  document.getElementById('referralResult').style.display = 'none';
   document.getElementById('generating').classList.remove('visible');
   document.getElementById('errorMsg').classList.remove('visible');
   document.getElementById('transcribeLabel').style.display = '';
@@ -758,6 +784,7 @@ async function regenSOAP() {
   const transcript = document.getElementById('transcribeText').textContent;
   if (!transcript) return;
   document.getElementById('soapResult').classList.remove('visible');
+  document.getElementById('referralResult').style.display = 'none';
   document.getElementById('errorMsg').classList.remove('visible');
   document.getElementById('generating').classList.add('visible');
   document.getElementById('btnGrid').style.display = 'none';
@@ -770,7 +797,7 @@ async function regenSOAP() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    renderSOAP(data);
+    if (data.referralText) renderReferral(data); else renderSOAP(data);
   } catch (err) {
     document.getElementById('generating').classList.remove('visible');
     showError('SOAP再生成に失敗しました: ' + err.message);
@@ -866,7 +893,7 @@ async function generateSOAPFromFile() {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      renderSOAP(data);
+      if (data.referralText) renderReferral(data); else renderSOAP(data);
     } catch (err) {
       document.getElementById('generating').classList.remove('visible');
       showError('SOAP生成に失敗しました: ' + err.message);

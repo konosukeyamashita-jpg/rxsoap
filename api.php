@@ -115,7 +115,93 @@ if (!empty($audioData)) {
     }
 }
 
-// ④ transcriptをClaudeに渡してSOAP生成
+// ④ transcriptをClaudeに渡して生成
+if ($visitType === 'referral') {
+    $referralPrompt = <<<PROMPT
+あなたは医療クリニックの医師です。
+以下の診察音声の書き起こしから紹介状（診療情報提供書）の下書きを作成してください。
+
+【書き起こし】
+{$transcript}
+
+【出力形式】
+以下のフォーマットで出力してください：
+
+拝啓
+
+貴院ますますご清祥のこととお慶び申し上げます。
+下記の患者様をご紹介申し上げます。ご高診のほどよろしくお願い申し上げます。
+
+【患者情報】
+氏名：（音声から取得、不明の場合は「____」）
+生年月日：（音声から取得、不明の場合は「____」）
+
+【紹介目的】
+（紹介の理由・目的を簡潔に）
+
+【現病歴・経過】
+（診察内容から経過を記載）
+
+【既往歴】
+（音声から取得、不明の場合は「特記事項なし」）
+
+【内服薬】
+（音声から取得、不明の場合は「なし」）
+
+【検査結果・所見】
+（音声から取得した検査値・所見、不明の場合は「添付資料参照」）
+
+【お願い事項】
+（紹介先へのお願い内容）
+
+敬具
+
+担当医：（音声から取得、不明の場合は「____」）
+
+カルテ本文のみを出力してください。説明文・前置き・後書きは不要です。
+PROMPT;
+
+    $messages = [['role' => 'user', 'content' => $referralPrompt]];
+    $payload = json_encode([
+        'model'      => 'claude-sonnet-4-20250514',
+        'max_tokens' => 2000,
+        'messages'   => $messages
+    ]);
+
+    $ch = curl_init('https://api.anthropic.com/v1/messages');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $payload,
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+            'x-api-key: ' . $apiKey,
+            'anthropic-version: 2023-06-01'
+        ],
+        CURLOPT_TIMEOUT        => 30,
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($httpCode !== 200) {
+        http_response_code(502);
+        echo json_encode([
+            'error'         => 'Claude API エラー: HTTP ' . $httpCode,
+            'response_body' => substr($response, 0, 1000),
+            'curl_error'    => $curlError
+        ]);
+        exit;
+    }
+
+    $apiData = json_decode($response, true);
+    $referralContent = $apiData['content'][0]['text'] ?? '';
+    echo json_encode(['referralText' => $referralContent, 'transcript' => $transcript], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 $visitInstruction = $visitType === 'saishin'
     ? "再診患者のカルテです。以下をコンパクトにまとめてください：\n前回からの経過・本日の訴え・処方変更・次回予定\nS/O/A/Pは簡潔に箇条書き2〜3項目程度に収めること"
     : "以下の項目を含めてください：\n【受診契機】【主訴】【現病歴】【既往歴】【家族歴】【アレルギー】【常用薬】\nS/O/A/Pの各項目を詳細に記載すること";
