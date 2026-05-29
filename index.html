@@ -797,10 +797,13 @@ function escHtml(str) {
 }
 
 async function loadMicDevices() {
+  console.log('loadMicDevices called');
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    console.log('getUserMedia success');
     stream.getTracks().forEach(t => t.stop());
     const devices = await navigator.mediaDevices.enumerateDevices();
+    console.log('devices:', devices);
     const sel = document.getElementById('micSelect');
     sel.innerHTML = '';
     devices.filter(d => d.kind === 'audioinput').forEach(d => {
@@ -809,11 +812,13 @@ async function loadMicDevices() {
       opt.textContent = d.label || 'マイク ' + (sel.options.length + 1);
       sel.appendChild(opt);
     });
+    console.log('micSelect options:', document.getElementById('micSelect').options.length);
   } catch (e) {
     // 権限拒否時は選択肢なしのまま
   }
 }
 
+document.addEventListener('DOMContentLoaded', loadMicDevices);
 loadMicDevices();
 </script>
 </body>
