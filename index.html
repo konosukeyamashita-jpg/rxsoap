@@ -453,7 +453,10 @@
       </div>
       <div class="meta-row">
         <span class="meta-label">マイク</span>
-        <span class="meta-val">内蔵マイク<span class="mic-dot"></span></span>
+        <select id="micSelect" style="font-size:11px; border:0.5px solid var(--border);
+          border-radius:4px; padding:2px 4px; background:var(--surface);
+          color:var(--text); max-width:160px;">
+        </select>
       </div>
 
       <div class="btn-grid">
@@ -549,7 +552,10 @@ async function startRec() {
   }, 130);
 
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const deviceId = document.getElementById('micSelect').value;
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: deviceId ? { deviceId: { exact: deviceId } } : true
+    });
     mediaRecorder = new MediaRecorder(micStream, { mimeType: 'audio/webm' });
     mediaRecorder.ondataavailable = (e) => {
       if (e.data.size > 0) recordedChunks.push(e.data);
@@ -789,6 +795,26 @@ async function generateSOAPFromFile() {
 function escHtml(str) {
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+async function loadMicDevices() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(t => t.stop());
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const sel = document.getElementById('micSelect');
+    sel.innerHTML = '';
+    devices.filter(d => d.kind === 'audioinput').forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.deviceId;
+      opt.textContent = d.label || 'マイク ' + (sel.options.length + 1);
+      sel.appendChild(opt);
+    });
+  } catch (e) {
+    // 権限拒否時は選択肢なしのまま
+  }
+}
+
+loadMicDevices();
 </script>
 </body>
 </html>
