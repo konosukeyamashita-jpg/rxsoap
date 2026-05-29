@@ -556,6 +556,7 @@ async function startRec() {
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: deviceId ? { deviceId: { exact: deviceId } } : true
     });
+    loadMicDevices();
     mediaRecorder = new MediaRecorder(micStream, { mimeType: 'audio/webm' });
     mediaRecorder.ondataavailable = (e) => {
       if (e.data.size > 0) recordedChunks.push(e.data);
@@ -799,22 +800,26 @@ function escHtml(str) {
 async function loadMicDevices() {
   console.log('loadMicDevices called');
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    console.log('getUserMedia success');
-    stream.getTracks().forEach(t => t.stop());
     const devices = await navigator.mediaDevices.enumerateDevices();
     console.log('devices:', devices);
-    const sel = document.getElementById('micSelect');
-    sel.innerHTML = '';
-    devices.filter(d => d.kind === 'audioinput').forEach(d => {
+    const audioInputs = devices.filter(d => d.kind === 'audioinput');
+    const select = document.getElementById('micSelect');
+    select.innerHTML = '';
+    if (audioInputs.length === 0) {
       const opt = document.createElement('option');
-      opt.value = d.deviceId;
-      opt.textContent = d.label || 'マイク ' + (sel.options.length + 1);
-      sel.appendChild(opt);
-    });
-    console.log('micSelect options:', document.getElementById('micSelect').options.length);
+      opt.text = 'デフォルトマイク';
+      select.add(opt);
+    } else {
+      audioInputs.forEach((d, i) => {
+        const opt = document.createElement('option');
+        opt.value = d.deviceId;
+        opt.text = d.label || 'マイク ' + (i + 1);
+        select.add(opt);
+      });
+    }
+    console.log('micSelect options:', select.options.length);
   } catch (err) {
-    console.error('getUserMedia error:', err.name, err.message);
+    console.error('enumerateDevices error:', err.name, err.message);
   }
 }
 
