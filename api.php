@@ -208,4 +208,10 @@ if (!$soap || !isset($soap['S'])) {
     exit;
 }
 
-echo json_encode($soap, JSON_UNESCAPED_UNICODE);
+echo json_encode([
+    'S'          => $soap['S'],
+    'O'          => $soap['O'],
+    'A'          => $soap['A'],
+    'P'          => $soap['P'],
+    'transcript' => $transcript
+], JSON_UNESCAPED_UNICODE);

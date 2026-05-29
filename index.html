@@ -655,6 +655,10 @@ function renderSOAP(data) {
     document.getElementById('soapStructured').style.display = 'block';
     document.getElementById('soapTextBlock').style.display = 'none';
   }
+  if (data.transcript) {
+    document.getElementById('placeholder').style.display = 'none';
+    document.getElementById('transcribeText').textContent = data.transcript;
+  }
   document.getElementById('soapResult').classList.add('visible');
   document.getElementById('btnCopy').disabled = false;
   setStatus('done', '生成完了');
