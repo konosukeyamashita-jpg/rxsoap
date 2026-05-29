@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>rxsoap</title>
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="rxsoap">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap');
 
@@ -34,22 +37,21 @@
   }
 
   .outer {
-    min-height: 100vh;
     display: flex;
-    align-items: stretch;
-    justify-content: center;
+    align-items: flex-start;
+    justify-content: flex-start;
     padding: 0;
   }
 
   /* ── パネル ── */
   .panel {
-    width: 320px;
+    width: 360px;
+    height: 680px;
     background: var(--surface);
     border-radius: var(--radius);
     border: 0.5px solid var(--border-mid);
     overflow: hidden;
     box-shadow: 0 2px 12px rgba(0,0,0,0.07);
-    height: 100vh;
     display: flex;
     flex-direction: column;
   }

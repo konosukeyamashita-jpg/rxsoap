@@ -1,0 +1,10 @@
+{
+  "name": "rxsoap",
+  "short_name": "rxsoap",
+  "start_url": "/product/rxsoap/",
+  "display": "standalone",
+  "background_color": "#f5f4f0",
+  "theme_color": "#1a9e7a",
+  "width": 360,
+  "height": 680
+}
