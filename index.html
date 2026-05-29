@@ -737,7 +737,9 @@ function setButtonState(state) {
     grid.style.gridTemplateColumns = '1fr 1fr';
     btnStart.style.display = 'none';
     document.getElementById('btnStop').style.display = '';
+    document.getElementById('btnStop').disabled = false;
     document.getElementById('btnPause').style.display = '';
+    document.getElementById('btnPause').disabled = false;
   } else if (state === 'done') {
     grid.style.display = 'grid';
     grid.style.gridTemplateColumns = '1fr 1fr';
