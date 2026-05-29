@@ -52,6 +52,8 @@ if (!empty($audioData)) {
     elseif (strpos($audioType, 'wav') !== false)   { $whisperFileName = 'audio.wav';  $whisperMime = 'audio/wav'; }
     elseif (strpos($audioType, 'webm') !== false)  { $whisperFileName = 'audio.webm'; $whisperMime = 'audio/webm'; }
 
+    $whisperPrompt = "医療クリニックの診察会話です。以下の専門用語が含まれます：高血圧、糖尿病、脂質異常症、心房細動、心不全、狭心症、心筋梗塞、気管支喘息、胃潰瘍、逆流性食道炎、慢性腎臓病、甲状腺機能亢進症、HbA1c、eGFR、子宮頸癌、子宮体癌、卵巣嚢腫、子宮筋腫、子宮内膜症、月経困難症、不正出血、妊娠週数、流産、切迫流産、HCG、経膣超音波、コルポスコピー、HPV、ピル、IUD、ミレーナ、更年期障害、変形性膝関節症、腰椎椎間板ヘルニア、脊柱管狭窄症、骨粗鬆症、半月板損傷、前十字靭帯、腱板断裂、RSウイルス、溶連菌、川崎病、アトピー性皮膚炎、白癬、帯状疱疹、前立腺肥大症、前立腺癌、PSA、過活動膀胱、副鼻腔炎、アレルギー性鼻炎、突発性難聴、メニエール病、緑内障、白内障、糖尿病網膜症、加齢黄斑変性、うつ病、双極性障害、統合失調症、パニック障害、ADHD、SSRI、不眠症";
+
     $boundary     = uniqid();
     $fileContents = file_get_contents($tmpFile);
     $body = "--{$boundary}\r\n"
@@ -64,6 +66,9 @@ if (!empty($audioData)) {
         . "--{$boundary}\r\n"
         . "Content-Disposition: form-data; name=\"language\"\r\n\r\n"
         . "ja\r\n"
+        . "--{$boundary}\r\n"
+        . "Content-Disposition: form-data; name=\"prompt\"\r\n\r\n"
+        . $whisperPrompt . "\r\n"
         . "--{$boundary}--\r\n";
 
     $whisperCh = curl_init('https://api.openai.com/v1/audio/transcriptions');
@@ -111,7 +116,7 @@ if (!empty($audioData)) {
 
 // ④ transcriptをClaudeに渡してSOAP生成
 $prompt = <<<PROMPT
-あなたは婦人科専門クリニックの医療記録専門家です。
+あなたは医療クリニックの医療記録専門家です。
 以下の診察音声の書き起こしを読み、SOAP形式でカルテを作成してください。
 
 【書き起こし】
