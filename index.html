@@ -398,7 +398,7 @@
         <span class="timer-text" id="timerText"></span>
       </div>
 
-      <div class="section-label">書き起こし</div>
+      <div class="section-label" id="transcribeLabel">書き起こし</div>
       <div class="transcribe-box" id="transcribeBox">
         <span class="transcribe-placeholder" id="placeholder">録音を開始すると書き起こしがここに表示されます</span>
         <span id="transcribeText"></span>
@@ -664,6 +664,10 @@ function renderSOAP(data) {
   document.getElementById('soapResult').classList.add('visible');
   document.getElementById('btnCopy').disabled = false;
   setStatus('done', '生成完了');
+  document.getElementById('transcribeLabel').style.display = 'none';
+  document.getElementById('transcribeBox').style.display = 'none';
+  document.getElementById('waveform').style.display = 'none';
+  document.getElementById('fileUploadArea').style.display = 'none';
 }
 
 // ── コピー ──
@@ -705,6 +709,8 @@ function nextPatient() {
   document.getElementById('soapResult').classList.remove('visible');
   document.getElementById('generating').classList.remove('visible');
   document.getElementById('errorMsg').classList.remove('visible');
+  document.getElementById('transcribeLabel').style.display = '';
+  document.getElementById('transcribeBox').style.display = '';
   document.getElementById('transcribeBox').classList.remove('active');
   document.getElementById('placeholder').style.display = 'inline';
   document.getElementById('transcribeText').textContent = '';
