@@ -724,21 +724,24 @@ function renderReferral(data) {
 // ── コピー ──
 function copySOAP() {
   let text;
-  const textBlock = document.getElementById('soapTextBlock');
-  const textPre = document.getElementById('soapTextPre');
-  if (textBlock.style.display !== 'none' && textPre.textContent) {
-    text = textPre.textContent;
+  if (visitType === 'referral') {
+    text = document.getElementById('referralText').textContent;
   } else {
-    const sections = { S: '主観的情報', O: '客観的情報', A: '評価', P: '計画' };
-    text = '【SOAP】\n';
-    ['S','O','A','P'].forEach(k => {
-      const el = document.getElementById('soap' + k);
-      const items = Array.from(el.querySelectorAll('li')).map(li => '・' + li.textContent);
-      text += '\n' + sections[k] + '（' + k + '）:\n' + items.join('\n') + '\n';
-    });
-    text = text.trim();
+    const textBlock = document.getElementById('soapTextBlock');
+    const textPre = document.getElementById('soapTextPre');
+    if (textBlock.style.display !== 'none' && textPre.textContent) {
+      text = textPre.textContent;
+    } else {
+      const sections = { S: '主観的情報', O: '客観的情報', A: '評価', P: '計画' };
+      text = '【SOAP】\n';
+      ['S','O','A','P'].forEach(k => {
+        const el = document.getElementById('soap' + k);
+        const items = Array.from(el.querySelectorAll('li')).map(li => '・' + li.textContent);
+        text += '\n' + sections[k] + '（' + k + '）:\n' + items.join('\n') + '\n';
+      });
+    }
   }
-  navigator.clipboard.writeText(text).catch(() => {});
+  navigator.clipboard.writeText((text || '').trim()).catch(() => {});
   const lbl = document.getElementById('copyLabel');
   const ico = document.getElementById('copyIcon');
   lbl.textContent = 'コピー済み';
