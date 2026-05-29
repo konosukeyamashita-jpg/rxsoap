@@ -800,7 +800,7 @@ function escHtml(str) {
 async function loadMicDevices() {
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
-    const audioInputs = devices.filter(d => d.kind === 'audioinput');
+    const audioInputs = devices.filter(d => d.kind === 'audioinput' && d.deviceId !== 'default' && d.deviceId !== 'communications');
     const select = document.getElementById('micSelect');
     select.innerHTML = '';
     if (audioInputs.length === 0) {
