@@ -798,10 +798,8 @@ function escHtml(str) {
 }
 
 async function loadMicDevices() {
-  console.log('loadMicDevices called');
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
-    console.log('devices:', devices);
     const audioInputs = devices.filter(d => d.kind === 'audioinput');
     const select = document.getElementById('micSelect');
     select.innerHTML = '';
@@ -817,9 +815,8 @@ async function loadMicDevices() {
         select.add(opt);
       });
     }
-    console.log('micSelect options:', select.options.length);
   } catch (err) {
-    console.error('enumerateDevices error:', err.name, err.message);
+    // デバイス一覧取得失敗時は選択肢なしのまま
   }
 }
 
