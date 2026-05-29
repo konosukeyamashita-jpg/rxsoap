@@ -813,8 +813,8 @@ async function loadMicDevices() {
       sel.appendChild(opt);
     });
     console.log('micSelect options:', document.getElementById('micSelect').options.length);
-  } catch (e) {
-    // 権限拒否時は選択肢なしのまま
+  } catch (err) {
+    console.error('getUserMedia error:', err.name, err.message);
   }
 }
 
