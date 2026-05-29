@@ -656,6 +656,7 @@ function renderSOAP(data) {
     document.getElementById('soapTextBlock').style.display = 'none';
   }
   document.getElementById('soapResult').classList.add('visible');
+  document.getElementById('btnCopy').disabled = false;
   setStatus('done', '生成完了');
   setButtonState('done');
   document.getElementById('transcribeLabel').style.display = 'none';
@@ -742,6 +743,7 @@ function setButtonState(state) {
     grid.style.gridTemplateColumns = '1fr 1fr';
     btnStart.style.display = 'none';
     document.getElementById('btnCopy').style.display = '';
+    document.getElementById('btnCopy').disabled = false;
     document.getElementById('btnNext').style.display = '';
   }
 }
