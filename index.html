@@ -427,6 +427,10 @@
       <div class="error-msg" id="errorMsg"></div>
 
       <div class="soap-result" id="soapResult">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+          <span style="font-size:10px; color:var(--text-hint); font-weight:600; letter-spacing:0.08em;">SOAP</span>
+          <button id="btnEdit" onclick="toggleEdit()" style="font-size:11px; border:0.5px solid var(--border); border-radius:4px; padding:2px 8px; background:none; color:var(--text-muted); cursor:pointer;">編集</button>
+        </div>
         <div id="soapTextBlock" style="display:none">
           <pre class="soap-text-pre" id="soapTextPre"></pre>
         </div>
@@ -666,6 +670,8 @@ function renderSOAP(data) {
     document.getElementById('placeholder').style.display = 'none';
     document.getElementById('transcribeText').textContent = data.transcript;
   }
+  editMode = false;
+  document.getElementById('btnEdit').textContent = '編集';
   document.getElementById('soapResult').classList.add('visible');
   document.getElementById('btnCopy').disabled = false;
   setStatus('done', '生成完了');
@@ -730,6 +736,29 @@ function nextPatient() {
   document.getElementById('fileName').classList.remove('has-file');
   document.getElementById('btnGenerate').disabled = true;
   selectedFile = null;
+}
+
+let editMode = false;
+
+function toggleEdit() {
+  editMode = !editMode;
+  const btn = document.getElementById('btnEdit');
+  ['S','O','A','P'].forEach(k => {
+    const el = document.getElementById('soap' + k);
+    if (editMode) {
+      const items = Array.from(el.querySelectorAll('li')).map(li => li.textContent);
+      const ta = document.createElement('textarea');
+      ta.value = items.join('\n');
+      ta.style.cssText = 'width:100%; font-size:12px; line-height:1.6; border:0.5px solid var(--border); border-radius:4px; padding:6px 8px; resize:vertical; min-height:60px; background:var(--surface); color:var(--text); font-family:\'DM Sans\',sans-serif; box-sizing:border-box;';
+      el.innerHTML = '';
+      el.appendChild(ta);
+    } else {
+      const ta = el.querySelector('textarea');
+      const lines = ta ? ta.value.split('\n').filter(l => l.trim()) : [];
+      el.innerHTML = '<ul>' + lines.map(l => '<li>' + escHtml(l) + '</li>').join('') + '</ul>';
+    }
+  });
+  btn.textContent = editMode ? '完了' : '編集';
 }
 
 async function regenSOAP() {
