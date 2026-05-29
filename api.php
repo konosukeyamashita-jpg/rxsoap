@@ -95,14 +95,16 @@ if (!empty($audioData)) {
     if ($whisperHttpCode !== 200) {
         http_response_code(502);
         echo json_encode([
-            'error'         => 'Whisper API エラー: HTTP ' . $whisperHttpCode,
-            'response_body' => substr($whisperResponse, 0, 1000),
-            'curl_error'    => $whisperCurlErr,
-            'tmp_file'      => $tmpFile,
-            'ext'           => $ext,
-            'audio_type'    => $audioType,
-            'file_exists'   => file_exists($tmpFile) ? 'yes' : 'no (already deleted)',
-            'file_size'     => strlen(base64_decode($audioData)),
+            'error'            => 'Whisper API エラー: HTTP ' . $whisperHttpCode,
+            'response_body'    => substr($whisperResponse, 0, 1000),
+            'curl_error'       => $whisperCurlErr,
+            'audio_type'       => $audioType,
+            'audio_data_size'  => strlen($audioData),
+            'file_size'        => strlen(base64_decode($audioData)),
+            'ext'              => $ext,
+            'whisper_filename' => $whisperFileName,
+            'whisper_mime'     => $whisperMime,
+            'file_exists'      => file_exists($tmpFile) ? 'yes' : 'no (already deleted)',
         ]);
         exit;
     }
