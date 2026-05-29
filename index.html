@@ -616,6 +616,7 @@ function stopRec() {
 // ── 録音完了 → Whisper → SOAP ──
 function onRecordingStop() {
   const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+  console.log('audioBlob size:', blob.size, 'type:', blob.type);
   const reader = new FileReader();
   reader.onload = async (e) => {
     const base64 = e.target.result.split(',')[1];
