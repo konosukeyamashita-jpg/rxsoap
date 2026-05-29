@@ -1,4 +1,43 @@
 <?php
+function maskPersonalInfo($transcript, $apiKey) {
+    $maskPrompt = "以下のテキストから個人情報を検出し、マスキングしてください。\n\n"
+        . "【マスキング対象】\n"
+        . "・患者氏名 → 【氏名】\n"
+        . "・生年月日・年齢 → 【生年月日】または【年齢】\n"
+        . "・住所 → 【住所】\n"
+        . "・電話番号 → 【電話番号】\n"
+        . "・保険証番号・診察券番号 → 【ID番号】\n\n"
+        . "【ルール】\n"
+        . "・医療情報（病名・症状・処方・検査値）はマスキングしない\n"
+        . "・マスキング済みテキストのみを返す（説明文不要）\n"
+        . "・マスキング対象がない場合はそのまま返す\n\n"
+        . "【テキスト】\n"
+        . $transcript;
+
+    $payload = json_encode([
+        'model' => 'claude-sonnet-4-20250514',
+        'max_tokens' => 1000,
+        'messages' => [['role' => 'user', 'content' => $maskPrompt]]
+    ]);
+
+    $ch = curl_init('https://api.anthropic.com/v1/messages');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/json',
+            'x-api-key: ' . $apiKey,
+            'anthropic-version: 2023-06-01'
+        ],
+        CURLOPT_TIMEOUT => 15,
+    ]);
+    $response = curl_exec($ch);
+    curl_close($ch);
+    $data = json_decode($response, true);
+    return $data['content'][0]['text'] ?? $transcript;
+}
+
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -113,6 +152,8 @@ if (!empty($audioData)) {
         echo json_encode(['error' => '音声の文字起こしに失敗しました']);
         exit;
     }
+
+    $transcript = maskPersonalInfo($transcript, $apiKey);
 }
 
 // ④ transcriptをClaudeに渡して生成
