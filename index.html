@@ -455,6 +455,19 @@
         <span class="meta-val">SOAPサマリー形式</span>
       </div>
       <div class="meta-row">
+        <span class="meta-label">診察タイプ</span>
+        <div style="display:flex; gap:4px;">
+          <button id="btnShinsin" onclick="setVisitType('shinsin')"
+            style="font-size:11px; padding:3px 10px; border-radius:4px; border:0.5px solid var(--border); cursor:pointer; background:#1a9e7a; color:#fff;">
+            初診
+          </button>
+          <button id="btnSaishin" onclick="setVisitType('saishin')"
+            style="font-size:11px; padding:3px 10px; border-radius:4px; border:0.5px solid var(--border); cursor:pointer; background:var(--surface); color:var(--text-muted);">
+            再診
+          </button>
+        </div>
+      </div>
+      <div class="meta-row">
         <span class="meta-label">マイク</span>
         <select id="micSelect" style="font-size:11px; border:0.5px solid var(--border);
           border-radius:4px; padding:2px 4px; background:var(--surface);
@@ -527,6 +540,15 @@
 let secs = 0, paused = false, timerInt = null, waveInt = null;
 let mediaRecorder = null, recordedChunks = [], micStream = null;
 let selectedFile = null;
+let visitType = 'shinsin';
+
+function setVisitType(type) {
+  visitType = type;
+  document.getElementById('btnShinsin').style.background = type === 'shinsin' ? '#1a9e7a' : 'var(--surface)';
+  document.getElementById('btnShinsin').style.color     = type === 'shinsin' ? '#fff' : 'var(--text-muted)';
+  document.getElementById('btnSaishin').style.background = type === 'saishin' ? '#1a9e7a' : 'var(--surface)';
+  document.getElementById('btnSaishin').style.color     = type === 'saishin' ? '#fff' : 'var(--text-muted)';
+}
 const bars = document.querySelectorAll('.wb');
 
 // ── 録音開始 ──
@@ -630,7 +652,7 @@ function onRecordingStop() {
       const res = await fetch('api.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audio_data: base64, audio_type: 'audio/webm' })
+        body: JSON.stringify({ audio_data: base64, audio_type: 'audio/webm', visitType })
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
@@ -743,7 +765,7 @@ async function regenSOAP() {
     const res = await fetch('api.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript })
+      body: JSON.stringify({ transcript, visitType })
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
@@ -839,7 +861,7 @@ async function generateSOAPFromFile() {
       const res = await fetch('api.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audio_data: base64, audio_type: mimeType })
+        body: JSON.stringify({ audio_data: base64, audio_type: mimeType, visitType })
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();

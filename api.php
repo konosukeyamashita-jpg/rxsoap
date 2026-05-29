@@ -21,6 +21,7 @@ $input = json_decode(file_get_contents('php://input'), true);
 $transcript = trim($input['transcript'] ?? '');
 $audioData = $input['audio_data'] ?? '';
 $audioType = $input['audio_type'] ?? 'audio/mp4';
+$visitType = $input['visitType'] ?? 'shinsin';
 
 if (empty($transcript) && empty($audioData)) {
     http_response_code(400);
@@ -115,9 +116,15 @@ if (!empty($audioData)) {
 }
 
 // ④ transcriptをClaudeに渡してSOAP生成
+$visitInstruction = $visitType === 'saishin'
+    ? "再診患者のカルテです。以下をコンパクトにまとめてください：\n前回からの経過・本日の訴え・処方変更・次回予定\nS/O/A/Pは簡潔に箇条書き2〜3項目程度に収めること"
+    : "以下の項目を含めてください：\n【受診契機】【主訴】【現病歴】【既往歴】【家族歴】【アレルギー】【常用薬】\nS/O/A/Pの各項目を詳細に記載すること";
+
 $prompt = <<<PROMPT
 あなたは医療クリニックの医療記録専門家です。
 以下の診察音声の書き起こしを読み、SOAP形式でカルテを作成してください。
+
+{$visitInstruction}
 
 【書き起こし】
 {$transcript}
