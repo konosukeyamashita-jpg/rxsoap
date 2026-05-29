@@ -477,6 +477,12 @@
           </svg>
           <span id="copyLabel">要約コピー</span>
         </button>
+        <button class="btn-sm" id="btnRegen" onclick="regenSOAP()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+          </svg>
+          再生成
+        </button>
         <button class="btn-sm dark" id="btnNext" onclick="nextPatient()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
@@ -726,11 +732,36 @@ function nextPatient() {
   selectedFile = null;
 }
 
+async function regenSOAP() {
+  const transcript = document.getElementById('transcribeText').textContent;
+  if (!transcript) return;
+  document.getElementById('soapResult').classList.remove('visible');
+  document.getElementById('errorMsg').classList.remove('visible');
+  document.getElementById('generating').classList.add('visible');
+  document.getElementById('btnGrid').style.display = 'none';
+  try {
+    const res = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcript })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    renderSOAP(data);
+  } catch (err) {
+    document.getElementById('generating').classList.remove('visible');
+    showError('SOAP再生成に失敗しました: ' + err.message);
+    setButtonState('done');
+  }
+}
+
 function setButtonState(state) {
   const grid = document.getElementById('btnGrid');
   const btnStart = document.getElementById('btnStart');
   [document.getElementById('btnStop'), document.getElementById('btnPause'),
-   document.getElementById('btnCopy'), document.getElementById('btnNext')].forEach(b => b.style.display = 'none');
+   document.getElementById('btnCopy'), document.getElementById('btnRegen'),
+   document.getElementById('btnNext')].forEach(b => b.style.display = 'none');
 
   if (state === 'idle') {
     grid.style.display = 'none';
@@ -745,10 +776,11 @@ function setButtonState(state) {
     document.getElementById('btnPause').disabled = false;
   } else if (state === 'done') {
     grid.style.display = 'grid';
-    grid.style.gridTemplateColumns = '1fr 1fr';
+    grid.style.gridTemplateColumns = '1fr 1fr 1fr';
     btnStart.style.display = 'none';
     document.getElementById('btnCopy').style.display = '';
     document.getElementById('btnCopy').disabled = false;
+    document.getElementById('btnRegen').style.display = '';
     document.getElementById('btnNext').style.display = '';
   }
 }
