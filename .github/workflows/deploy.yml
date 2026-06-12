@@ -45,4 +45,5 @@ jobs:
             api.php \
             manifest.json \
             favicon.svg \
+            logs.php \
             ${{ secrets.SAKURA_USER }}@${{ secrets.SAKURA_HOST }}:~/www/product/rxsoap/
