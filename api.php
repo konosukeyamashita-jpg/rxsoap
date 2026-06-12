@@ -38,6 +38,20 @@ function maskPersonalInfo($transcript, $apiKey) {
     return $data['content'][0]['text'] ?? $transcript;
 }
 
+function writeLog($pdo, $data) {
+    if ($pdo === null) return;
+    $sql = "INSERT INTO rxsoap_logs
+        (visit_type, audio_type, audio_size, whisper_status,
+         whisper_transcript, masked_transcript, soap_status,
+         soap_response, error_message, processing_time_ms)
+        VALUES
+        (:visit_type, :audio_type, :audio_size, :whisper_status,
+         :whisper_transcript, :masked_transcript, :soap_status,
+         :soap_response, :error_message, :processing_time_ms)";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($data);
+}
+
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -45,6 +59,19 @@ header('Access-Control-Allow-Headers: Content-Type');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); echo json_encode(['error' => 'Method not allowed']); exit; }
+
+try {
+    $pdo = new PDO(
+        'mysql:host=mysql3115.db.sakura.ne.jp;dbname=medask-clinic_rxscan_product;charset=utf8mb4',
+        'medask-clinic_rxscan_product',
+        '0Np5ZorT9jsAQcw09vXNbBaR_x8zs-As',
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+    );
+} catch (Exception $e) {
+    // DB接続失敗してもSOAP処理は継続する
+    $pdo = null;
+}
+$startTime = microtime(true);
 
 // APIキーはGitHub Actionsでデプロイ時に置換される
 $apiKey = '__ANTHROPIC_API_KEY__';
@@ -62,8 +89,24 @@ $audioData = $input['audio_data'] ?? '';
 $audioType = $input['audio_type'] ?? 'audio/mp4';
 $visitType = $input['visitType'] ?? 'shinsin';
 
+$logData = [
+    'visit_type' => $visitType,
+    'audio_type' => $audioType ?? 'text',
+    'audio_size' => strlen($audioData ?? ''),
+    'whisper_status' => null,
+    'whisper_transcript' => null,
+    'masked_transcript' => null,
+    'soap_status' => null,
+    'soap_response' => null,
+    'error_message' => null,
+    'processing_time_ms' => null,
+];
+
 if (empty($transcript) && empty($audioData)) {
     http_response_code(400);
+    $logData['error_message'] = 'transcript/audio_data missing';
+    $logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
+    writeLog($pdo, $logData);
     echo json_encode(['error' => '書き起こしテキストまたは音声データが必要です']);
     exit;
 }
@@ -130,6 +173,10 @@ if (!empty($audioData)) {
 
     if ($whisperHttpCode !== 200) {
         http_response_code(502);
+        $logData['whisper_status'] = $whisperHttpCode;
+        $logData['error_message'] = 'Whisper API エラー: HTTP ' . $whisperHttpCode;
+        $logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
+        writeLog($pdo, $logData);
         echo json_encode([
             'error'         => 'Whisper API エラー: HTTP ' . $whisperHttpCode,
             'response_body' => substr($whisperResponse, 0, 1000),
@@ -149,11 +196,19 @@ if (!empty($audioData)) {
 
     if (empty($transcript)) {
         http_response_code(500);
+        $logData['whisper_status'] = $whisperHttpCode;
+        $logData['error_message'] = '音声の文字起こしに失敗しました';
+        $logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
+        writeLog($pdo, $logData);
         echo json_encode(['error' => '音声の文字起こしに失敗しました']);
         exit;
     }
 
+    $logData['whisper_status'] = $whisperHttpCode;
+    $logData['whisper_transcript'] = $transcript;
+
     $transcript = maskPersonalInfo($transcript, $apiKey);
+    $logData['masked_transcript'] = $transcript;
 }
 
 // ④ transcriptをClaudeに渡して生成
@@ -229,6 +284,10 @@ PROMPT;
 
     if ($httpCode !== 200) {
         http_response_code(502);
+        $logData['soap_status'] = $httpCode;
+        $logData['error_message'] = 'Claude API エラー: HTTP ' . $httpCode;
+        $logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
+        writeLog($pdo, $logData);
         echo json_encode([
             'error'         => 'Claude API エラー: HTTP ' . $httpCode,
             'response_body' => substr($response, 0, 1000),
@@ -239,6 +298,10 @@ PROMPT;
 
     $apiData = json_decode($response, true);
     $referralContent = $apiData['content'][0]['text'] ?? '';
+    $logData['soap_status'] = $httpCode;
+    $logData['soap_response'] = substr($referralContent, 0, 2000);
+    $logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
+    writeLog($pdo, $logData);
     echo json_encode(['referralText' => $referralContent, 'transcript' => $transcript], JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -312,6 +375,10 @@ curl_close($ch);
 
 if ($httpCode !== 200) {
     http_response_code(502);
+    $logData['soap_status'] = $httpCode;
+    $logData['error_message'] = 'Claude API エラー: HTTP ' . $httpCode;
+    $logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
+    writeLog($pdo, $logData);
     echo json_encode([
         'error'         => 'Claude API エラー: HTTP ' . $httpCode,
         'response_body' => substr($response, 0, 1000),
@@ -329,10 +396,19 @@ $soap = json_decode($text, true);
 
 if (!$soap || !isset($soap['S'])) {
     http_response_code(500);
+    $logData['soap_status'] = $httpCode;
+    $logData['soap_response'] = substr($text, 0, 2000);
+    $logData['error_message'] = 'SOAPのパースに失敗しました';
+    $logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
+    writeLog($pdo, $logData);
     echo json_encode(['error' => 'SOAPのパースに失敗しました']);
     exit;
 }
 
+$logData['soap_status'] = $httpCode;
+$logData['soap_response'] = substr($text, 0, 2000);
+$logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
+writeLog($pdo, $logData);
 echo json_encode([
     'S'          => $soap['S'],
     'O'          => $soap['O'],
