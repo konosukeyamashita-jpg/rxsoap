@@ -26,6 +26,38 @@ $errors  = (int)$pdo->query("SELECT COUNT(*) FROM rxsoap_logs WHERE error_messag
 $avgMs   = (int)$pdo->query("SELECT AVG(processing_time_ms) FROM rxsoap_logs WHERE processing_time_ms IS NOT NULL")->fetchColumn();
 
 $visitLabels = ['shinsin' => '初診', 'saishin' => '再診', 'referral' => '紹介状'];
+
+function explainError($row) {
+    if (!$row['error_message']) {
+        if ($row['processing_time_ms'] > 30000) {
+            return '⚠️ 処理に時間がかかりました（' . round($row['processing_time_ms']/1000) . '秒）。音声が長すぎる可能性があります。';
+        }
+        return '✅ 正常';
+    }
+    $err = $row['error_message'];
+    if (strpos($err, 'タイムアウト') !== false || strpos($err, 'timeout') !== false) {
+        return '⏱️ タイムアウト：音声が長すぎました。2〜3分以内に分けて録音してください。';
+    }
+    if (strpos($err, 'Whisper') !== false) {
+        return '🎤 音声認識エラー：音声ファイルの形式が対応していないか、音声が短すぎます。mp3またはwav形式をお試しください。';
+    }
+    if ($row['whisper_status'] === null) {
+        return '🎤 音声認識開始前にエラー：マイクへのアクセスが拒否されたか、音声データが空です。';
+    }
+    if ($row['whisper_transcript'] && !$row['soap_status']) {
+        return '📝 SOAP生成エラー：音声認識は成功しましたが、カルテ生成に失敗しました。再度お試しください。';
+    }
+    if ($row['whisper_status'] == 400) {
+        return '🎤 音声形式エラー：このファイル形式は対応していません。mp3またはwav形式をお試しください。';
+    }
+    if ($row['whisper_status'] == 429 || $row['soap_status'] == 429) {
+        return '🚦 アクセス集中：しばらく待ってから再度お試しください。';
+    }
+    if ($row['soap_status'] == 500 || $row['soap_status'] == 502) {
+        return '⚙️ サーバーエラー：一時的な問題が発生しました。しばらく待ってから再度お試しください。';
+    }
+    return '❓ 不明なエラー：開発者にお問い合わせください。';
+}
 ?>
 <!DOCTYPE html>
 <html lang="ja">
@@ -60,6 +92,14 @@ $visitLabels = ['shinsin' => '初診', 'saishin' => '再診', 'referral' => '紹
 <body>
 <h1>rxsoap ログ管理</h1>
 
+<div style="background:#e8f4fd; border-radius:8px; padding:16px; margin-bottom:20px; font-size:14px;">
+  <strong>📋 このページの使い方</strong><br><br>
+  録音やSOAP生成がうまくいかなかった場合、このページで原因を確認できます。<br>
+  「状況・対処法」列に原因と次回への対処方法が表示されます。<br>
+  <span style="color:#e53935;">赤い行</span>はエラーが発生したケース、
+  <span style="color:#f59f00;">黄色い行</span>は処理に時間がかかったケースです。
+</div>
+
 <div class="summary">
   <div class="summary-card">
     <div class="label">総件数</div>
@@ -84,7 +124,7 @@ $visitLabels = ['shinsin' => '初診', 'saishin' => '再診', 'referral' => '紹
       <th>Whisper</th>
       <th>SOAP</th>
       <th>処理時間(ms)</th>
-      <th>エラー</th>
+      <th>状況・対処法</th>
     </tr>
   </thead>
   <tbody>
@@ -109,7 +149,7 @@ $visitLabels = ['shinsin' => '初診', 'saishin' => '再診', 'referral' => '紹
       <td><?= $whisperBadge ?></td>
       <td><?= $soapBadge ?></td>
       <td><span class="<?= $msClass ?>"><?= $row['processing_time_ms'] !== null ? number_format((int)$row['processing_time_ms']) : '' ?></span></td>
-      <td class="err-cell" title="<?= htmlspecialchars($row['error_message'] ?? '') ?>"><?= htmlspecialchars(mb_strimwidth($row['error_message'] ?? '', 0, 60, '…')) ?></td>
+      <td style="white-space:normal; font-size:12px;"><?= htmlspecialchars(explainError($row)) ?></td>
     </tr>
   <?php endforeach; ?>
   </tbody>
