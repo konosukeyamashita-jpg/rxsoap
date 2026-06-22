@@ -390,7 +390,15 @@ if ($httpCode !== 200) {
 $apiData = json_decode($response, true);
 $text = $apiData['content'][0]['text'] ?? '';
 
+// マークダウンのコードフェンスを除去
 $text = trim(preg_replace('/```json|```/', '', $text));
+
+// 最初の { から最後の } までを抽出（前後の余計なテキストを除去）
+$start = strpos($text, '{');
+$end = strrpos($text, '}');
+if ($start !== false && $end !== false && $end > $start) {
+    $text = substr($text, $start, $end - $start + 1);
+}
 
 $soap = json_decode($text, true);
 
@@ -401,7 +409,11 @@ if (!$soap || !isset($soap['S'])) {
     $logData['error_message'] = 'SOAPのパースに失敗しました';
     $logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
     writeLog($pdo, $logData);
-    echo json_encode(['error' => 'SOAPのパースに失敗しました']);
+    echo json_encode([
+        'error'      => 'SOAPのパースに失敗しました',
+        'debug_text' => substr($text, 0, 500),
+        'json_error' => json_last_error_msg()
+    ]);
     exit;
 }
 
