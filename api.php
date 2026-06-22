@@ -15,7 +15,7 @@ function maskPersonalInfo($transcript, $apiKey) {
         . $transcript;
 
     $payload = json_encode([
-        'model' => 'claude-sonnet-4-20250514',
+        'model' => 'claude-sonnet-4-6',
         'max_tokens' => 1000,
         'messages' => [['role' => 'user', 'content' => $maskPrompt]]
     ]);
@@ -259,7 +259,7 @@ PROMPT;
 
     $messages = [['role' => 'user', 'content' => $referralPrompt]];
     $payload = json_encode([
-        'model'      => 'claude-sonnet-4-20250514',
+        'model'      => 'claude-sonnet-4-6',
         'max_tokens' => 2000,
         'messages'   => $messages
     ]);
@@ -350,7 +350,7 @@ PROMPT;
 $messages = [['role' => 'user', 'content' => $prompt]];
 
 $payload = json_encode([
-    'model'      => 'claude-sonnet-4-20250514',
+    'model'      => 'claude-sonnet-4-6',
     'max_tokens' => 2000,
     'messages'   => $messages
 ]);
