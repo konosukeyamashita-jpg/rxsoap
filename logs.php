@@ -29,8 +29,11 @@ $visitLabels = ['shinsin' => '初診', 'saishin' => '再診', 'referral' => '紹
 
 function explainError($row) {
     if (!$row['error_message']) {
+        if ($row['processing_time_ms'] > 60000) {
+            return '⚠️ 処理に60秒以上かかりました。通常の診察音声であれば問題ありませんが、極端に長い場合は録音を分けることをおすすめします。';
+        }
         if ($row['processing_time_ms'] > 30000) {
-            return '⚠️ 処理に時間がかかりました（' . round($row['processing_time_ms']/1000) . '秒）。音声が長すぎる可能性があります。';
+            return '✅ 正常（やや長め: ' . round($row['processing_time_ms']/1000) . '秒）';
         }
         return '✅ 正常';
     }

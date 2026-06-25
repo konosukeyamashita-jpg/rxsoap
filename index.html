@@ -551,7 +551,7 @@ let mediaRecorder = null, recordedChunks = [], micStream = null;
 let selectedFile = null;
 let visitType = 'shinsin';
 
-async function fetchWithTimeout(url, options, timeoutMs = 60000) {
+async function fetchWithTimeout(url, options, timeoutMs = 120000) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
