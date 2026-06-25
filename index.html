@@ -554,6 +554,8 @@ let chunkIndex = 0, transcriptParts = [], pendingTranscriptions = [];
 let failedChunks = 0;
 const CHUNK_DURATION_MS = 30000;
 let chunkTimer = null;
+let audioContext = null, analyser = null, volumeRAF = null;
+let lowVolumeStart = null;
 
 async function fetchWithTimeout(url, options, timeoutMs = 120000) {
   const controller = new AbortController();
@@ -618,6 +620,7 @@ async function startRec() {
     chunkIndex = 0; transcriptParts = []; pendingTranscriptions = []; failedChunks = 0;
     startNewChunk();
     chunkTimer = setInterval(rotateChunk, CHUNK_DURATION_MS);
+    startVolumeMeter(micStream);
   } catch (e) {
     clearInterval(timerInt); clearInterval(waveInt); timerInt = null;
     showError('マイクへのアクセスを許可してください');
@@ -670,6 +673,7 @@ async function stopRec() {
     micStream.getTracks().forEach(t => t.stop());
     micStream = null;
   }
+  stopVolumeMeter();
 
   try {
     await Promise.all(pendingTranscriptions);
@@ -710,6 +714,58 @@ async function stopRec() {
     document.getElementById('fileUploadArea').style.display = 'block';
     setButtonState('idle');
   }
+}
+
+// ── 音量メーター ──
+function startVolumeMeter(stream) {
+  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const source = audioContext.createMediaStreamSource(stream);
+  analyser = audioContext.createAnalyser();
+  analyser.fftSize = 256;
+  source.connect(analyser);
+  const dataArray = new Uint8Array(analyser.frequencyBinCount);
+  clearInterval(waveInt); waveInt = null;
+  function update() {
+    analyser.getByteFrequencyData(dataArray);
+    const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+    updateVolumeUI(avg);
+    volumeRAF = requestAnimationFrame(update);
+  }
+  update();
+}
+
+function updateVolumeUI(avg) {
+  bars.forEach(b => {
+    const h = paused ? 4 : Math.max(4, Math.round((avg / 255) * 18 + 4 + Math.random() * 3));
+    b.style.height = h + 'px';
+    b.className = 'wb' + (paused ? '' : ' active');
+  });
+  if (!paused) {
+    if (avg < 5) {
+      if (!lowVolumeStart) lowVolumeStart = Date.now();
+      if (Date.now() - lowVolumeStart >= 3000 && !document.getElementById('volumeWarnMsg')) {
+        const warn = document.createElement('div');
+        warn.id = 'volumeWarnMsg';
+        warn.style.cssText = 'font-size:11px;color:#f59f00;background:#fff8e1;border-radius:4px;padding:4px 8px;margin-bottom:4px;';
+        warn.textContent = '⚠️ マイクの音量が小さいようです。マイクの位置や設定を確認してください';
+        const box = document.getElementById('transcribeBox');
+        box.insertBefore(warn, box.firstChild);
+      }
+    } else {
+      lowVolumeStart = null;
+      const warn = document.getElementById('volumeWarnMsg');
+      if (warn) warn.remove();
+    }
+  }
+}
+
+function stopVolumeMeter() {
+  cancelAnimationFrame(volumeRAF); volumeRAF = null;
+  if (audioContext) { audioContext.close(); audioContext = null; }
+  analyser = null;
+  lowVolumeStart = null;
+  const warn = document.getElementById('volumeWarnMsg');
+  if (warn) warn.remove();
 }
 
 // ── チャンク録音開始 ──
@@ -846,6 +902,7 @@ function copySOAP() {
 function nextPatient() {
   clearInterval(timerInt); clearInterval(waveInt); timerInt = null;
   clearInterval(chunkTimer); chunkTimer = null;
+  stopVolumeMeter();
   if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
   if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
   secs = 0; paused = false; recordedChunks = [];
