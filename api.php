@@ -237,7 +237,7 @@ if (!empty($audioData)) {
         $logData['whisper_status'] = $whisperHttpCode;
         $logData['error_message'] = '音声の文字起こしに失敗しました';
         $logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
-        writeLog($pdo, $logData);
+        if (!$transcribeOnly) writeLog($pdo, $logData);
         echo json_encode(['error' => '音声の文字起こしに失敗しました']);
         exit;
     }
@@ -250,9 +250,6 @@ if (!empty($audioData)) {
         if (mb_strlen($transcript) < 5) {
             $transcript = '';
         }
-        $logData['whisper_transcript'] = $transcript;
-        $logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
-        writeLog($pdo, $logData);
         echo json_encode(['transcript' => $transcript]);
         exit;
     }
