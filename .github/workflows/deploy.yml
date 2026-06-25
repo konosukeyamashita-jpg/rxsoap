@@ -38,6 +38,12 @@ jobs:
             ${{ secrets.SAKURA_USER }}@${{ secrets.SAKURA_HOST }} \
             "mkdir -p ~/www/product/rxsoap"
 
+      - name: Remove debug files from server
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+            ${{ secrets.SAKURA_USER }}@${{ secrets.SAKURA_HOST }} \
+            "rm -f ~/www/product/rxsoap/phpinfo_check.php ~/www/product/rxsoap/.user.ini ~/www/product/rxsoap/debug.log"
+
       - name: Deploy files
         run: |
           scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
@@ -46,7 +52,5 @@ jobs:
             manifest.json \
             favicon.svg \
             logs.php \
-            phpinfo_check.php \
-            .user.ini \
             .htaccess \
             ${{ secrets.SAKURA_USER }}@${{ secrets.SAKURA_HOST }}:~/www/product/rxsoap/
