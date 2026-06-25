@@ -406,16 +406,20 @@
       </div>
 
       <div class="waveform" id="waveform">
-        <div class="wb" style="height:4px"></div><div class="wb" style="height:9px"></div>
-        <div class="wb" style="height:5px"></div><div class="wb" style="height:14px"></div>
-        <div class="wb" style="height:7px"></div><div class="wb" style="height:18px"></div>
-        <div class="wb" style="height:11px"></div><div class="wb" style="height:6px"></div>
-        <div class="wb" style="height:20px"></div><div class="wb" style="height:8px"></div>
-        <div class="wb" style="height:13px"></div><div class="wb" style="height:5px"></div>
-        <div class="wb" style="height:9px"></div><div class="wb" style="height:22px"></div>
-        <div class="wb" style="height:6px"></div><div class="wb" style="height:11px"></div>
-        <div class="wb" style="height:4px"></div><div class="wb" style="height:16px"></div>
+        <div class="wb" style="height:3px"></div><div class="wb" style="height:4px"></div>
+        <div class="wb" style="height:5px"></div><div class="wb" style="height:6px"></div>
+        <div class="wb" style="height:7px"></div><div class="wb" style="height:8px"></div>
+        <div class="wb" style="height:9px"></div><div class="wb" style="height:9px"></div>
+        <div class="wb" style="height:10px"></div><div class="wb" style="height:11px"></div>
+        <div class="wb" style="height:11px"></div><div class="wb" style="height:11px"></div>
+        <div class="wb" style="height:11px"></div><div class="wb" style="height:11px"></div>
+        <div class="wb" style="height:11px"></div><div class="wb" style="height:10px"></div>
+        <div class="wb" style="height:9px"></div><div class="wb" style="height:9px"></div>
+        <div class="wb" style="height:8px"></div><div class="wb" style="height:7px"></div>
+        <div class="wb" style="height:6px"></div><div class="wb" style="height:5px"></div>
+        <div class="wb" style="height:4px"></div><div class="wb" style="height:3px"></div>
       </div>
+      <div id="volumeStatus" style="text-align:center; font-size:12px; margin-top:4px; height:16px;"></div>
 
       <div class="generating" id="generating">
         <svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
@@ -737,11 +741,30 @@ function startVolumeMeter(stream) {
 }
 
 function updateVolumeUI(avg) {
-  bars.forEach(b => {
-    const h = paused ? 4 : Math.max(4, Math.round((avg / 255) * 18 + 4 + Math.random() * 3));
+  let color, statusText, statusColor;
+  if (paused) {
+    color = '#ccc'; statusText = ''; statusColor = '';
+  } else if (avg < 5) {
+    color = '#ccc'; statusText = '🔇 音声が検出されません'; statusColor = '#aaa';
+  } else if (avg < 15) {
+    color = '#f59f00'; statusText = '🔈 やや小さい'; statusColor = '#f59f00';
+  } else {
+    color = '#1a9e7a'; statusText = '🎙️ 良好'; statusColor = '#1a9e7a';
+  }
+
+  bars.forEach((b, i) => {
+    const envelope = Math.sin((i / (bars.length - 1)) * Math.PI);
+    const base = Math.min(28, avg / 180 * 28 + 3);
+    const noise = Math.random() * 3 - 1.5;
+    const h = paused ? Math.round(3 + envelope * 8) : Math.max(3, Math.round(base * (0.3 + 0.7 * envelope) + noise));
     b.style.height = h + 'px';
-    b.className = 'wb' + (paused ? '' : ' active');
+    b.style.background = color;
+    b.className = 'wb';
   });
+
+  const statusEl = document.getElementById('volumeStatus');
+  if (statusEl) { statusEl.textContent = statusText; statusEl.style.color = statusColor; }
+
   if (!paused) {
     if (avg < 5) {
       if (!lowVolumeStart) lowVolumeStart = Date.now();
@@ -768,6 +791,14 @@ function stopVolumeMeter() {
   lowVolumeStart = null;
   const warn = document.getElementById('volumeWarnMsg');
   if (warn) warn.remove();
+  bars.forEach((b, i) => {
+    const envelope = Math.sin((i / (bars.length - 1)) * Math.PI);
+    b.style.height = Math.round(3 + envelope * 8) + 'px';
+    b.style.background = '#e0e0e0';
+    b.className = 'wb';
+  });
+  const statusEl = document.getElementById('volumeStatus');
+  if (statusEl) statusEl.textContent = '';
 }
 
 // ── チャンク録音開始 ──
