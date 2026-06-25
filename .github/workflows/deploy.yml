@@ -48,4 +48,5 @@ jobs:
             logs.php \
             phpinfo_check.php \
             .user.ini \
+            .htaccess \
             ${{ secrets.SAKURA_USER }}@${{ secrets.SAKURA_HOST }}:~/www/product/rxsoap/
