@@ -45,6 +45,25 @@ function maskPersonalInfo($transcript, $apiKey) {
     return $data['content'][0]['text'] ?? $transcript;
 }
 
+function removeHallucinations($text) {
+    $patterns = [
+        'ご視聴ありがとうございました',
+        'ご清聴ありがとうございました',
+        'ご覧いただきありがとうございました',
+        '参考になったらいいねとコメントをお願いします',
+        'チャンネル登録お願いします',
+        'best regards',
+        'ご視聴ありがとうございます',
+        '本日はご覧いただきありがとうございました',
+        'おやすみなさい',
+    ];
+    foreach ($patterns as $p) {
+        $text = str_replace($p, '', $text);
+    }
+    $text = preg_replace('/(.{4,30}?)(\s*\1){2,}/u', '$1', $text);
+    return trim($text);
+}
+
 function writeLog($pdo, $data) {
     if ($pdo === null) return;
     $sql = "INSERT INTO rxsoap_logs
@@ -166,6 +185,9 @@ if (!empty($audioData)) {
         . "--{$boundary}\r\n"
         . "Content-Disposition: form-data; name=\"prompt\"\r\n\r\n"
         . $whisperPrompt . "\r\n"
+        . "--{$boundary}\r\n"
+        . "Content-Disposition: form-data; name=\"temperature\"\r\n\r\n"
+        . "0\r\n"
         . "--{$boundary}--\r\n";
 
     $whisperStart = microtime(true);
@@ -224,6 +246,11 @@ if (!empty($audioData)) {
     $logData['whisper_transcript'] = $transcript;
 
     if ($transcribeOnly) {
+        $transcript = removeHallucinations($transcript);
+        if (mb_strlen($transcript) < 5) {
+            $transcript = '';
+        }
+        $logData['whisper_transcript'] = $transcript;
         $logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
         writeLog($pdo, $logData);
         echo json_encode(['transcript' => $transcript]);
