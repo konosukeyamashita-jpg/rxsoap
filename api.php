@@ -97,6 +97,8 @@ $transcript = trim($input['transcript'] ?? '');
 $audioData = $input['audio_data'] ?? '';
 $audioType = $input['audio_type'] ?? 'audio/mp4';
 $visitType = $input['visitType'] ?? 'shinsin';
+$transcribeOnly = !empty($input['transcribeOnly']);
+$soapOnly = !empty($input['soapOnly']);
 
 $logData = [
     'visit_type' => $visitType,
@@ -221,6 +223,20 @@ if (!empty($audioData)) {
     $logData['whisper_status'] = $whisperHttpCode;
     $logData['whisper_transcript'] = $transcript;
 
+    if ($transcribeOnly) {
+        $logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
+        writeLog($pdo, $logData);
+        echo json_encode(['transcript' => $transcript]);
+        exit;
+    }
+
+    $maskStart = microtime(true);
+    $transcript = maskPersonalInfo($transcript, $apiKey);
+    $logData['mask_time_ms'] = round((microtime(true) - $maskStart) * 1000);
+    $logData['masked_transcript'] = $transcript;
+}
+
+if ($soapOnly) {
     $maskStart = microtime(true);
     $transcript = maskPersonalInfo($transcript, $apiKey);
     $logData['mask_time_ms'] = round((microtime(true) - $maskStart) * 1000);

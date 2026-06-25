@@ -550,6 +550,9 @@ let secs = 0, paused = false, timerInt = null, waveInt = null;
 let mediaRecorder = null, recordedChunks = [], micStream = null;
 let selectedFile = null;
 let visitType = 'shinsin';
+let chunkIndex = 0, transcriptParts = [], pendingTranscriptions = [];
+const CHUNK_DURATION_MS = 30000;
+let chunkTimer = null;
 
 async function fetchWithTimeout(url, options, timeoutMs = 120000) {
   const controller = new AbortController();
@@ -611,12 +614,9 @@ async function startRec() {
       audio: deviceId ? { deviceId: { exact: deviceId } } : true
     });
     loadMicDevices();
-    mediaRecorder = new MediaRecorder(micStream, { mimeType: 'audio/webm' });
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) recordedChunks.push(e.data);
-    };
-    mediaRecorder.onstop = onRecordingStop;
-    mediaRecorder.start();
+    chunkIndex = 0; transcriptParts = []; pendingTranscriptions = [];
+    startNewChunk();
+    chunkTimer = setInterval(rotateChunk, CHUNK_DURATION_MS);
   } catch (e) {
     clearInterval(timerInt); clearInterval(waveInt); timerInt = null;
     showError('マイクへのアクセスを許可してください');
@@ -633,13 +633,15 @@ function togglePause() {
   const icon = document.getElementById('pauseIcon');
   const label = document.getElementById('pauseLabel');
   if (paused) {
-    if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.pause();
+    clearInterval(chunkTimer); chunkTimer = null;
+    if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
     setStatus('paused', '一時停止中');
     document.getElementById('recBar').className = 'rec-bar paused';
     icon.innerHTML = '<polygon points="5,3 19,12 5,21"/>';
     label.textContent = '再開';
   } else {
-    if (mediaRecorder && mediaRecorder.state === 'paused') mediaRecorder.resume();
+    startNewChunk();
+    chunkTimer = setInterval(rotateChunk, CHUNK_DURATION_MS);
     setStatus('recording', '録音中');
     document.getElementById('recBar').className = 'rec-bar recording';
     icon.innerHTML = '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>';
@@ -648,8 +650,9 @@ function togglePause() {
 }
 
 // ── 録音停止 ──
-function stopRec() {
+async function stopRec() {
   clearInterval(timerInt); clearInterval(waveInt); timerInt = null;
+  clearInterval(chunkTimer); chunkTimer = null;
   paused = false;
   bars.forEach(b => { b.style.height = '4px'; b.className = 'wb'; });
   document.getElementById('waveform').style.display = 'none';
@@ -666,33 +669,76 @@ function stopRec() {
     micStream.getTracks().forEach(t => t.stop());
     micStream = null;
   }
+
+  try {
+    await Promise.all(pendingTranscriptions);
+    const fullTranscript = transcriptParts.filter(p => p).join(' ');
+    document.getElementById('placeholder').style.display = 'none';
+    document.getElementById('transcribeText').textContent = fullTranscript;
+    const res = await fetchWithTimeout('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcript: fullTranscript, visitType, soapOnly: true })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    if (data.referralText) renderReferral(data); else renderSOAP(data);
+  } catch (err) {
+    document.getElementById('generating').classList.remove('visible');
+    showError('SOAP生成に失敗しました: ' + err.message);
+    setStatus('idle', '待機中');
+    document.getElementById('fileUploadArea').style.display = 'block';
+    setButtonState('idle');
+  }
 }
 
-// ── 録音完了 → Whisper → SOAP ──
-function onRecordingStop() {
-  const blob = new Blob(recordedChunks, { type: 'audio/webm' });
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    const base64 = e.target.result.split(',')[1];
-    try {
-      const res = await fetchWithTimeout('api.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audio_data: base64, audio_type: 'audio/webm', visitType })
-      });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      if (data.referralText) renderReferral(data); else renderSOAP(data);
-    } catch (err) {
-      document.getElementById('generating').classList.remove('visible');
-      showError('SOAP生成に失敗しました: ' + err.message);
-      setStatus('idle', '待機中');
-      document.getElementById('fileUploadArea').style.display = 'block';
-      setButtonState('idle');
-    }
+// ── チャンク録音開始 ──
+function startNewChunk() {
+  const index = chunkIndex++;
+  transcriptParts[index] = null;
+  const chunks = [];
+  let resolveChunk;
+  const chunkPromise = new Promise(resolve => { resolveChunk = resolve; });
+  pendingTranscriptions.push(chunkPromise);
+  mediaRecorder = new MediaRecorder(micStream, { mimeType: 'audio/webm' });
+  mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+  mediaRecorder.onstop = async () => {
+    const blob = new Blob(chunks, { type: 'audio/webm' });
+    await transcribeChunk(blob, index);
+    resolveChunk();
   };
-  reader.readAsDataURL(blob);
+  mediaRecorder.start();
+}
+
+// ── 30秒ごとのローテーション ──
+function rotateChunk() {
+  if (paused) return;
+  if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+  startNewChunk();
+}
+
+// ── チャンクの文字起こし（バックグラウンド） ──
+async function transcribeChunk(blob, index) {
+  const reader = new FileReader();
+  const base64 = await new Promise(resolve => {
+    reader.onload = e => resolve(e.target.result.split(',')[1]);
+    reader.readAsDataURL(blob);
+  });
+  try {
+    const res = await fetchWithTimeout('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ audio_data: base64, audio_type: 'audio/webm', transcribeOnly: true })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    transcriptParts[index] = data.transcript || '';
+  } catch (e) {
+    transcriptParts[index] = '';
+  }
+  const done = transcriptParts.filter(p => p !== null).length;
+  document.getElementById('transcribeText').textContent = `文字起こし中... (${done}/${chunkIndex})`;
 }
 
 function renderSOAP(data) {
@@ -771,9 +817,11 @@ function copySOAP() {
 // ── 次の診察（リセット） ──
 function nextPatient() {
   clearInterval(timerInt); clearInterval(waveInt); timerInt = null;
+  clearInterval(chunkTimer); chunkTimer = null;
   if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
   if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
   secs = 0; paused = false; recordedChunks = [];
+  chunkIndex = 0; transcriptParts = []; pendingTranscriptions = [];
   bars.forEach(b => { b.style.height = '4px'; b.className = 'wb'; });
   document.getElementById('soapResult').classList.remove('visible');
   document.getElementById('referralResult').style.display = 'none';
