@@ -591,7 +591,7 @@ async function startRec() {
   document.getElementById('generating').classList.remove('visible');
   document.getElementById('errorMsg').classList.remove('visible');
   document.getElementById('placeholder').style.display = 'none';
-  document.getElementById('transcribeText').textContent = '録音中...（文字起こしは録音完了後に実行されます）';
+  document.getElementById('transcribeText').textContent = '録音中...';
   document.getElementById('transcribeBox').classList.add('active');
   document.getElementById('waveform').style.display = 'flex';
 
@@ -677,6 +677,8 @@ async function stopRec() {
 
   try {
     await Promise.all(pendingTranscriptions);
+    const progSpan = document.getElementById('chunkProgressSpan');
+    if (progSpan) progSpan.remove();
     const fullTranscript = transcriptParts.filter(p => p && p !== '[音声認識失敗]').join(' ');
     document.getElementById('placeholder').style.display = 'none';
     document.getElementById('transcribeText').textContent = fullTranscript;
@@ -786,6 +788,37 @@ function startNewChunk() {
   mediaRecorder.start();
 }
 
+// ── リアルタイム書き起こし表示 ──
+function updateLiveTranscript() {
+  const parts = [];
+  for (let i = 0; i < chunkIndex; i++) {
+    if (transcriptParts[i] !== undefined && transcriptParts[i] !== '' && transcriptParts[i] !== '[音声認識失敗]') {
+      parts.push(transcriptParts[i]);
+    }
+  }
+  const text = parts.join(' ');
+  if (text) {
+    document.getElementById('placeholder').style.display = 'none';
+    document.getElementById('transcribeText').textContent = text;
+    const tb = document.getElementById('transcribeBox');
+    tb.scrollTop = tb.scrollHeight;
+  }
+  const done = transcriptParts.filter(p => p !== null).length;
+  const total = chunkIndex;
+  let progressEl = document.getElementById('chunkProgressSpan');
+  if (done < total) {
+    if (!progressEl) {
+      progressEl = document.createElement('span');
+      progressEl.id = 'chunkProgressSpan';
+      progressEl.style.cssText = 'color:var(--text-hint);font-size:11px;';
+      document.getElementById('transcribeBox').appendChild(progressEl);
+    }
+    progressEl.textContent = ` （文字起こし中...）`;
+  } else if (progressEl) {
+    progressEl.remove();
+  }
+}
+
 // ── 30秒ごとのローテーション ──
 function rotateChunk() {
   if (paused) return;
@@ -821,8 +854,7 @@ async function transcribeChunk(blob, index) {
       }
     }
   }
-  const done = transcriptParts.filter(p => p !== null).length;
-  document.getElementById('transcribeText').textContent = `文字起こし中... (${done}/${chunkIndex})`;
+  updateLiveTranscript();
 }
 
 function renderSOAP(data) {
@@ -916,6 +948,8 @@ function nextPatient() {
   document.getElementById('transcribeBox').style.display = '';
   document.getElementById('transcribeBox').classList.remove('active');
   document.getElementById('placeholder').style.display = 'inline';
+  const progSpanNext = document.getElementById('chunkProgressSpan');
+  if (progSpanNext) progSpanNext.remove();
   document.getElementById('transcribeText').textContent = '';
   document.getElementById('recBar').className = 'rec-bar';
   document.getElementById('waveform').style.display = 'flex';
