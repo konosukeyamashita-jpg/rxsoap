@@ -1,4 +1,11 @@
 <?php
+// 実行時間・メモリ制限の引き上げ（長い音声処理対応）
+@ini_set('max_execution_time', '300');
+@set_time_limit(300);
+@ini_set('memory_limit', '512M');
+@ini_set('post_max_size', '64M');
+@ini_set('upload_max_filesize', '64M');
+
 function maskPersonalInfo($transcript, $apiKey) {
     $maskPrompt = "以下のテキストから個人情報を検出し、マスキングしてください。\n\n"
         . "【マスキング対象】\n"
