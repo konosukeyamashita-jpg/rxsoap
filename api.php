@@ -50,11 +50,13 @@ function writeLog($pdo, $data) {
     $sql = "INSERT INTO rxsoap_logs
         (visit_type, audio_type, audio_size, whisper_status,
          whisper_transcript, masked_transcript, soap_status,
-         soap_response, error_message, processing_time_ms)
+         soap_response, error_message, processing_time_ms,
+         whisper_time_ms, mask_time_ms, soap_time_ms)
         VALUES
         (:visit_type, :audio_type, :audio_size, :whisper_status,
          :whisper_transcript, :masked_transcript, :soap_status,
-         :soap_response, :error_message, :processing_time_ms)";
+         :soap_response, :error_message, :processing_time_ms,
+         :whisper_time_ms, :mask_time_ms, :soap_time_ms)";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($data);
 }
@@ -107,6 +109,9 @@ $logData = [
     'soap_response' => null,
     'error_message' => null,
     'processing_time_ms' => null,
+    'whisper_time_ms' => null,
+    'mask_time_ms' => null,
+    'soap_time_ms' => null,
 ];
 
 if (empty($transcript) && empty($audioData)) {
@@ -161,6 +166,7 @@ if (!empty($audioData)) {
         . $whisperPrompt . "\r\n"
         . "--{$boundary}--\r\n";
 
+    $whisperStart = microtime(true);
     $whisperCh = curl_init('https://api.openai.com/v1/audio/transcriptions');
     curl_setopt_array($whisperCh, [
         CURLOPT_RETURNTRANSFER => true,
@@ -177,6 +183,7 @@ if (!empty($audioData)) {
     $whisperHttpCode = curl_getinfo($whisperCh, CURLINFO_HTTP_CODE);
     $whisperCurlErr  = curl_error($whisperCh);
     curl_close($whisperCh);
+    $logData['whisper_time_ms'] = round((microtime(true) - $whisperStart) * 1000);
 
     if ($whisperHttpCode !== 200) {
         http_response_code(502);
@@ -214,7 +221,9 @@ if (!empty($audioData)) {
     $logData['whisper_status'] = $whisperHttpCode;
     $logData['whisper_transcript'] = $transcript;
 
+    $maskStart = microtime(true);
     $transcript = maskPersonalInfo($transcript, $apiKey);
+    $logData['mask_time_ms'] = round((microtime(true) - $maskStart) * 1000);
     $logData['masked_transcript'] = $transcript;
 }
 
@@ -271,6 +280,7 @@ PROMPT;
         'messages'   => $messages
     ]);
 
+    $soapStart = microtime(true);
     $ch = curl_init('https://api.anthropic.com/v1/messages');
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
@@ -288,6 +298,7 @@ PROMPT;
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlError = curl_error($ch);
     curl_close($ch);
+    $logData['soap_time_ms'] = round((microtime(true) - $soapStart) * 1000);
 
     if ($httpCode !== 200) {
         http_response_code(502);
@@ -362,6 +373,7 @@ $payload = json_encode([
     'messages'   => $messages
 ]);
 
+$soapStart = microtime(true);
 $ch = curl_init('https://api.anthropic.com/v1/messages');
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
@@ -379,6 +391,7 @@ $response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 $curlError = curl_error($ch);
 curl_close($ch);
+$logData['soap_time_ms'] = round((microtime(true) - $soapStart) * 1000);
 
 if ($httpCode !== 200) {
     http_response_code(502);

@@ -127,6 +127,9 @@ function explainError($row) {
       <th>Whisper</th>
       <th>SOAP</th>
       <th>処理時間(ms)</th>
+      <th>Whisper(ms)</th>
+      <th>マスク(ms)</th>
+      <th>SOAP(ms)</th>
       <th>状況・対処法</th>
     </tr>
   </thead>
@@ -152,6 +155,9 @@ function explainError($row) {
       <td><?= $whisperBadge ?></td>
       <td><?= $soapBadge ?></td>
       <td><span class="<?= $msClass ?>"><?= $row['processing_time_ms'] !== null ? number_format((int)$row['processing_time_ms']) : '' ?></span></td>
+      <td class="time-cell"><?= $row['whisper_time_ms'] !== null ? number_format((int)$row['whisper_time_ms']) : '' ?></td>
+      <td class="time-cell"><?= $row['mask_time_ms'] !== null ? number_format((int)$row['mask_time_ms']) : '' ?></td>
+      <td class="time-cell"><?= $row['soap_time_ms'] !== null ? number_format((int)$row['soap_time_ms']) : '' ?></td>
       <td style="white-space:normal; font-size:12px;"><?= htmlspecialchars(explainError($row)) ?></td>
     </tr>
   <?php endforeach; ?>
