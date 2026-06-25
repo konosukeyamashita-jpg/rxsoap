@@ -551,6 +551,7 @@ let mediaRecorder = null, recordedChunks = [], micStream = null;
 let selectedFile = null;
 let visitType = 'shinsin';
 let chunkIndex = 0, transcriptParts = [], pendingTranscriptions = [];
+let failedChunks = 0;
 const CHUNK_DURATION_MS = 30000;
 let chunkTimer = null;
 
@@ -614,7 +615,7 @@ async function startRec() {
       audio: deviceId ? { deviceId: { exact: deviceId } } : true
     });
     loadMicDevices();
-    chunkIndex = 0; transcriptParts = []; pendingTranscriptions = [];
+    chunkIndex = 0; transcriptParts = []; pendingTranscriptions = []; failedChunks = 0;
     startNewChunk();
     chunkTimer = setInterval(rotateChunk, CHUNK_DURATION_MS);
   } catch (e) {
@@ -672,9 +673,19 @@ async function stopRec() {
 
   try {
     await Promise.all(pendingTranscriptions);
-    const fullTranscript = transcriptParts.filter(p => p).join(' ');
+    const fullTranscript = transcriptParts.filter(p => p && p !== '[音声認識失敗]').join(' ');
     document.getElementById('placeholder').style.display = 'none';
     document.getElementById('transcribeText').textContent = fullTranscript;
+
+    if (!fullTranscript) {
+      document.getElementById('generating').classList.remove('visible');
+      showError('音声を認識できませんでした。もう一度録音してください。');
+      setStatus('idle', '待機中');
+      document.getElementById('fileUploadArea').style.display = 'block';
+      setButtonState('idle');
+      return;
+    }
+
     const res = await fetchWithTimeout('api.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -684,6 +695,14 @@ async function stopRec() {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     if (data.referralText) renderReferral(data); else renderSOAP(data);
+
+    if (failedChunks > 0) {
+      const box = document.getElementById('transcribeBox');
+      const warn = document.createElement('div');
+      warn.style.cssText = 'font-size:11px;color:#f59f00;background:#fff8e1;border-radius:4px;padding:4px 8px;margin-bottom:6px;';
+      warn.textContent = `⚠️ 録音の一部（${failedChunks}箇所）が認識できませんでした。SOAPの内容を確認してください。`;
+      box.insertBefore(warn, box.firstChild);
+    }
   } catch (err) {
     document.getElementById('generating').classList.remove('visible');
     showError('SOAP生成に失敗しました: ' + err.message);
@@ -725,17 +744,26 @@ async function transcribeChunk(blob, index) {
     reader.onload = e => resolve(e.target.result.split(',')[1]);
     reader.readAsDataURL(blob);
   });
-  try {
-    const res = await fetchWithTimeout('api.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ audio_data: base64, audio_type: 'audio/webm', transcribeOnly: true })
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    transcriptParts[index] = data.transcript || '';
-  } catch (e) {
-    transcriptParts[index] = '';
+  const requestOptions = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ audio_data: base64, audio_type: 'audio/webm', transcribeOnly: true })
+  };
+  let succeeded = false;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetchWithTimeout('api.php', requestOptions, 30000);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      transcriptParts[index] = data.transcript || '';
+      succeeded = true;
+      break;
+    } catch (e) {
+      if (attempt === 1) {
+        transcriptParts[index] = '[音声認識失敗]';
+        failedChunks++;
+      }
+    }
   }
   const done = transcriptParts.filter(p => p !== null).length;
   document.getElementById('transcribeText').textContent = `文字起こし中... (${done}/${chunkIndex})`;
