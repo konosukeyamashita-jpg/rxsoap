@@ -37,7 +37,7 @@ function maskPersonalInfo($transcript, $apiKey) {
             'x-api-key: ' . $apiKey,
             'anthropic-version: 2023-06-01'
         ],
-        CURLOPT_TIMEOUT => 15,
+        CURLOPT_TIMEOUT => 60,
     ]);
     $response = curl_exec($ch);
     curl_close($ch);
@@ -254,22 +254,18 @@ if (!empty($audioData)) {
         exit;
     }
 
-    $maskStart = microtime(true);
-    $transcript = maskPersonalInfo($transcript, $apiKey);
-    $logData['mask_time_ms'] = round((microtime(true) - $maskStart) * 1000);
     $logData['masked_transcript'] = $transcript;
 }
 
 if ($soapOnly) {
-    $maskStart = microtime(true);
-    $transcript = maskPersonalInfo($transcript, $apiKey);
-    $logData['mask_time_ms'] = round((microtime(true) - $maskStart) * 1000);
     $logData['masked_transcript'] = $transcript;
 }
 
 // ④ transcriptをClaudeに渡して生成
 if ($visitType === 'referral') {
     $referralPrompt = <<<PROMPT
+まず書き起こしから個人情報（患者氏名・生年月日・住所・電話番号・ID番号）を除去した上で、紹介状を作成してください。紹介状の内容には個人情報を含めないこと。
+
 あなたは医療クリニックの医師です。
 以下の診察音声の書き起こしから紹介状（診療情報提供書）の下書きを作成してください。
 
@@ -331,7 +327,7 @@ PROMPT;
             'x-api-key: ' . $apiKey,
             'anthropic-version: 2023-06-01'
         ],
-        CURLOPT_TIMEOUT        => 30,
+        CURLOPT_TIMEOUT        => 90,
     ]);
 
     $response = curl_exec($ch);
@@ -369,6 +365,8 @@ $visitInstruction = $visitType === 'saishin'
     : "以下の項目を含めてください：\n【受診契機】【主訴】【現病歴】【既往歴】【家族歴】【アレルギー】【常用薬】\nS/O/A/Pの各項目を詳細に記載すること";
 
 $prompt = <<<PROMPT
+まず書き起こしから個人情報（患者氏名・生年月日・住所・電話番号・ID番号）を除去した上で、SOAPカルテを作成してください。SOAPの内容には個人情報を含めないこと。
+
 あなたは医療クリニックの医療記録専門家です。
 以下の診察音声の書き起こしを読み、SOAP形式でカルテを作成してください。
 
@@ -424,7 +422,7 @@ curl_setopt_array($ch, [
         'x-api-key: ' . $apiKey,
         'anthropic-version: 2023-06-01'
     ],
-    CURLOPT_TIMEOUT        => 30,
+    CURLOPT_TIMEOUT        => 90,
 ]);
 
 $response = curl_exec($ch);
