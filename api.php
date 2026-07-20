@@ -69,15 +69,37 @@ function writeLog($pdo, $data) {
     $sql = "INSERT INTO rxsoap_logs
         (visit_type, audio_type, audio_size, whisper_status,
          whisper_transcript, masked_transcript, soap_status,
-         soap_response, error_message, processing_time_ms,
+         soap_response, error_message, saved_audio_path, processing_time_ms,
          whisper_time_ms, mask_time_ms, soap_time_ms)
         VALUES
         (:visit_type, :audio_type, :audio_size, :whisper_status,
          :whisper_transcript, :masked_transcript, :soap_status,
-         :soap_response, :error_message, :processing_time_ms,
+         :soap_response, :error_message, :saved_audio_path, :processing_time_ms,
          :whisper_time_ms, :mask_time_ms, :soap_time_ms)";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($data);
+}
+
+// エラー・認識失敗時のみ、デバッグ用に音声を公開ディレクトリ外へ保存する
+function saveAudioOnError($audioData, $audioType, $errorType, $isChunk = false) {
+    if (empty($audioData)) return null;
+
+    $ext = 'm4a';
+    if (strpos($audioType, 'mp3') !== false)       $ext = 'mp3';
+    elseif (strpos($audioType, 'wav') !== false)   $ext = 'wav';
+    elseif (strpos($audioType, 'webm') !== false)  $ext = 'webm';
+
+    $saveDir = dirname(__DIR__, 3) . '/rxsoap_recordings/';
+    if (!is_dir($saveDir)) {
+        @mkdir($saveDir, 0700, true);
+    }
+    if (!is_dir($saveDir) || !is_writable($saveDir)) return null;
+
+    $fileName = date('Ymd_His') . '_' . $errorType . ($isChunk ? '_chunk' : '') . '.' . $ext;
+    $filePath = $saveDir . $fileName;
+    if (file_put_contents($filePath, base64_decode($audioData)) === false) return null;
+
+    return $filePath;
 }
 
 header('Content-Type: application/json; charset=utf-8');
@@ -129,6 +151,7 @@ $logData = [
     'soap_status' => null,
     'soap_response' => null,
     'error_message' => null,
+    'saved_audio_path' => null,
     'processing_time_ms' => null,
     'whisper_time_ms' => null,
     'mask_time_ms' => null,
@@ -213,6 +236,7 @@ if (!empty($audioData)) {
         http_response_code(502);
         $logData['whisper_status'] = $whisperHttpCode;
         $logData['error_message'] = 'Whisper API エラー: HTTP ' . $whisperHttpCode;
+        $logData['saved_audio_path'] = saveAudioOnError($audioData, $audioType, 'whisper_error', $transcribeOnly);
         $logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
         writeLog($pdo, $logData);
         echo json_encode([
@@ -232,12 +256,14 @@ if (!empty($audioData)) {
     $whisperData = json_decode($whisperResponse, true);
     $transcript  = $whisperData['text'] ?? '';
 
-    if (empty($transcript)) {
+    if (empty($transcript) || mb_strlen($transcript) < 5) {
         http_response_code(500);
         $logData['whisper_status'] = $whisperHttpCode;
+        $logData['whisper_transcript'] = $transcript;
         $logData['error_message'] = '音声の文字起こしに失敗しました';
+        $logData['saved_audio_path'] = saveAudioOnError($audioData, $audioType, 'transcript_empty', $transcribeOnly);
         $logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
-        if (!$transcribeOnly) writeLog($pdo, $logData);
+        writeLog($pdo, $logData);
         echo json_encode(['error' => '音声の文字起こしに失敗しました']);
         exit;
     }
@@ -249,6 +275,11 @@ if (!empty($audioData)) {
         $transcript = removeHallucinations($transcript);
         if (mb_strlen($transcript) < 5) {
             $transcript = '';
+            $logData['whisper_status'] = $whisperHttpCode;
+            $logData['error_message'] = 'ハルシネーション除去後にテキストが空になりました';
+            $logData['saved_audio_path'] = saveAudioOnError($audioData, $audioType, 'hallucination_empty', true);
+            $logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
+            writeLog($pdo, $logData);
         }
         echo json_encode(['transcript' => $transcript]);
         exit;
@@ -340,6 +371,7 @@ PROMPT;
         http_response_code(502);
         $logData['soap_status'] = $httpCode;
         $logData['error_message'] = 'Claude API エラー: HTTP ' . $httpCode;
+        $logData['saved_audio_path'] = saveAudioOnError($audioData, $audioType, 'soap_error');
         $logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
         writeLog($pdo, $logData);
         echo json_encode([
@@ -435,6 +467,7 @@ if ($httpCode !== 200) {
     http_response_code(502);
     $logData['soap_status'] = $httpCode;
     $logData['error_message'] = 'Claude API エラー: HTTP ' . $httpCode;
+    $logData['saved_audio_path'] = saveAudioOnError($audioData, $audioType, 'soap_error');
     $logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
     writeLog($pdo, $logData);
     echo json_encode([
