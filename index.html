@@ -560,6 +560,11 @@ const CHUNK_DURATION_MS = 30000;
 let chunkTimer = null;
 let audioContext = null, analyser = null, volumeRAF = null;
 let lowVolumeStart = null;
+// 現在録音中のチャンクの音量統計。onstopは非同期に発火するため、
+// startNewChunk()内でチャンクごとに新しいオブジェクトを割り当て、
+// クロージャで捕捉することで次チャンクのリセットと競合しないようにする。
+let currentChunkVolume = null;
+const SILENCE_THRESHOLD = 8;
 
 async function fetchWithTimeout(url, options, timeoutMs = 120000) {
   const controller = new AbortController();
@@ -741,6 +746,12 @@ function startVolumeMeter(stream) {
 }
 
 function updateVolumeUI(avg) {
+  if (currentChunkVolume) {
+    currentChunkVolume.sum += avg;
+    currentChunkVolume.count++;
+    if (avg > currentChunkVolume.max) currentChunkVolume.max = avg;
+  }
+
   let color, statusText, statusColor;
   if (paused) {
     color = '#ccc'; statusText = ''; statusColor = '';
@@ -806,6 +817,8 @@ function startNewChunk() {
   const index = chunkIndex++;
   transcriptParts[index] = null;
   const chunks = [];
+  const volumeStats = { sum: 0, count: 0, max: 0 };
+  currentChunkVolume = volumeStats;
   let resolveChunk;
   const chunkPromise = new Promise(resolve => { resolveChunk = resolve; });
   pendingTranscriptions.push(chunkPromise);
@@ -813,6 +826,13 @@ function startNewChunk() {
   mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
   mediaRecorder.onstop = async () => {
     if (chunks.length === 0) {
+      transcriptParts[index] = '';
+      updateLiveTranscript();
+      resolveChunk();
+      return;
+    }
+    if (volumeStats.max < SILENCE_THRESHOLD) {
+      console.log(`無音チャンクをスキップ (${index})`);
       transcriptParts[index] = '';
       updateLiveTranscript();
       resolveChunk();
