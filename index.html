@@ -812,6 +812,12 @@ function startNewChunk() {
   mediaRecorder = new MediaRecorder(micStream, { mimeType: 'audio/webm' });
   mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
   mediaRecorder.onstop = async () => {
+    if (chunks.length === 0) {
+      transcriptParts[index] = '';
+      updateLiveTranscript();
+      resolveChunk();
+      return;
+    }
     const blob = new Blob(chunks, { type: 'audio/webm' });
     await transcribeChunk(blob, index);
     resolveChunk();
@@ -859,6 +865,11 @@ function rotateChunk() {
 
 // ── チャンクの文字起こし（バックグラウンド） ──
 async function transcribeChunk(blob, index) {
+  if (!blob || blob.size < 1000) {
+    transcriptParts[index] = '';
+    updateLiveTranscript();
+    return;
+  }
   const reader = new FileReader();
   const base64 = await new Promise(resolve => {
     reader.onload = e => resolve(e.target.result.split(',')[1]);
