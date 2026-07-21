@@ -235,7 +235,7 @@ if (!empty($audioData)) {
     if ($whisperHttpCode !== 200) {
         http_response_code(502);
         $logData['whisper_status'] = $whisperHttpCode;
-        $logData['error_message'] = 'Whisper API エラー: HTTP ' . $whisperHttpCode;
+        $logData['error_message'] = 'Whisper API エラー: HTTP ' . $whisperHttpCode . ' / ' . substr($whisperResponse, 0, 500);
         $logData['saved_audio_path'] = saveAudioOnError($audioData, $audioType, 'whisper_error', $transcribeOnly);
         $logData['processing_time_ms'] = round((microtime(true) - $startTime) * 1000);
         writeLog($pdo, $logData);
