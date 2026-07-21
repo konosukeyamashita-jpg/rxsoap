@@ -201,7 +201,7 @@ if (!empty($audioData)) {
         . $fileContents . "\r\n"
         . "--{$boundary}\r\n"
         . "Content-Disposition: form-data; name=\"model\"\r\n\r\n"
-        . "whisper-1\r\n"
+        . "gpt-4o-transcribe\r\n"
         . "--{$boundary}\r\n"
         . "Content-Disposition: form-data; name=\"language\"\r\n\r\n"
         . "ja\r\n"
